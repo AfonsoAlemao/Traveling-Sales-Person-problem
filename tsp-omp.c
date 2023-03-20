@@ -18,7 +18,7 @@
 
 #include "tsp-omp.h"
 
-#define N_THREADS 8
+#define N_THREADS 12
 
 /**********************************************************************************
 * tsp_omp()
@@ -166,8 +166,8 @@ Solution *tsp_omp(Inputs *input) {
                 }
 
                 
-                while(whistle == tid && flag != 1) {
-                                        
+                while(whistle == tid && queue[tid]->size != 0) {
+                              
                     count = 0;
 
                     for (int k = 0; k < omp_get_num_threads(); k++){
