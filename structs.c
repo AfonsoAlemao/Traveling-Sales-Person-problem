@@ -59,6 +59,7 @@ struct _path {
 Inputs *create_inputs(int n_cities) {
     Inputs *new_input;
 	new_input = NULL;
+    int j = 0;
 
     new_input = (Inputs *) malloc(sizeof(Inputs));
     if (new_input == NULL) error();
@@ -69,12 +70,6 @@ Inputs *create_inputs(int n_cities) {
         free_inputs(new_input);
         error();
     }
-
-    for (int i = 0; i < n_cities; i++) {
-		for (int j = 0; j < n_cities; j++) {
-            new_input->adj_matrix[i][j] = -1;
-        }
-	}
 
     new_input->max_value = 0;
 	new_input->n_cities = n_cities;
@@ -93,9 +88,12 @@ Inputs *create_inputs(int n_cities) {
         error();
     }
 
-	for (int i = 0; i < n_cities; i++) {
-		new_input->min1[i] = -1;
+    for (int i = 0; i < n_cities; i++) {
+        new_input->min1[i] = -1;
         new_input->min2[i] = -1;
+		for (j = 0; j < n_cities; j++) {
+            new_input->adj_matrix[i][j] = -1;
+        }
 	}
 
     return new_input;
@@ -249,6 +247,7 @@ Solution *create_solution(int n_cities) {
         return NULL;
     }
 
+    //#pragma omp for schedule(static, 1)
 	for (int i = 0; i < n_cities + 1; i++) {
 		new_solution->BestTour[i] = -1;
 	}
@@ -357,6 +356,8 @@ Path *create_path(int n_cities) {
     }
 
     new_path->Tour[0] = 0;
+    
+    //#pragma omp for schedule(static, 1)
 	for (int i = 1; i < n_cities + 1; i++) {
 		new_path->Tour[i] = -1;
 	}
@@ -427,6 +428,8 @@ void set_Tour_item(int index, Path *got_path, int city, int n_cities) {
 
 void set_Tour(Path *got_path, int *tour, int n_cities) {
     if (got_path == NULL) return;
+    
+    //#pragma omp for schedule(static, 1)
     for (int i = 0; i < n_cities + 1; i++) {
         set_Tour_item(i, got_path, tour[i], n_cities);
     }

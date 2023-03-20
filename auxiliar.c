@@ -19,6 +19,8 @@
 
 #include "auxiliar.h"
 
+#define SWAP(x, y) void* tmp = x; x = y; y = tmp;
+
 /**********************************************************************************
 * parse_inputs()
 *
@@ -342,6 +344,7 @@ double InitialLowerBound(Inputs *inputs) {
 	if (inputs == NULL) return -1;
 	double result = 0;
 
+	//#pragma omp parallel for schedule(static, 1)
 	for (int i = 0; i < get_n_cities(inputs); i++) {
 		result += get_min1(i, inputs) + get_min2(i, inputs);
 	}
@@ -464,4 +467,41 @@ void *free_safe (void *aux) {
         free(aux);
     }
     return NULL;
+}
+
+// Return the element with the lowest value in the queue, after removing it.
+void queue_clean(priority_queue_t *queue, double BestTourCost)
+{
+    if(queue->size == 0) return;
+
+    for (int i = queue->size - 1; i >= 0; i--) {
+        if (get_bound(queue->buffer[i]) > BestTourCost) {
+            SWAP(queue->buffer[i], queue->buffer[queue->size-1]);
+            free_path(queue->buffer[queue->size-1]);
+            queue->size--;
+            // printf("Free\n");
+
+        }
+    }
+
+    // if (get_bound(queue->buffer[queue->size*3/4]) > BestTourCost) {
+    //     queue_free_from_i(queue, queue->size*3/4);
+    // }
+    // else if(get_bound(queue->buffer[queue->size*7/8]) > BestTourCost) {
+    //     queue_free_from_i(queue, queue->size*7/8);
+    // }
+
+    return;
+}
+// Return the element with the lowest value in the queue, after removing it.
+void queue_free_from_i(priority_queue_t *queue, int index)
+{
+	if(queue->size == 0) return;
+
+	for (int i = index; i < queue->size; i++) {
+		free_path(queue->buffer[i]);
+	}
+	queue->size = index;
+
+	return;
 }

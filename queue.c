@@ -84,6 +84,7 @@ void queue_push(priority_queue_t *queue, void* new_element)
 		SWAP(queue->buffer[node], queue->buffer[parent])
 		node = parent;
 	}
+
 }
 
 // Return the element with the lowest value in the queue, after removing it.

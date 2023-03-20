@@ -17,6 +17,7 @@
 #define _AUXILIAR_H
 
 #include "structs.h"
+#include "queue.h"
 
 /* Methods */
 
@@ -35,5 +36,9 @@ void print_matrix(int, Inputs *);
 void print_result(Solution *, int);
 Inputs *ReadFileIn(FILE *, double);
 void ValidInputFileName(char *);
+
+void queue_clean(priority_queue_t *queue, double BestTourCost);
+void queue_free_from_i(priority_queue_t *queue, int index);
+
 
 #endif
