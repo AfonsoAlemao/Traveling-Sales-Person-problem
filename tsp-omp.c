@@ -18,6 +18,8 @@
 
 #include "tsp-omp.h"
 
+#define N_THREADS 8
+
 /**********************************************************************************
 * tsp_omp()
 *
@@ -57,20 +59,19 @@ Solution *tsp_omp(Inputs *input) {
     set_bound(initial_path, InitialLowerBound(input));
 
     
-    Path *new_path[32];
-    int exit_global = 0;
-    priority_queue_t *queue[32];
+    Path *new_path[N_THREADS];
+    int exit_global = 0, clean[N_THREADS];
+    priority_queue_t *queue[N_THREADS];
 
-    omp_set_num_threads(8);
+    omp_set_num_threads(N_THREADS);
     #pragma omp parallel shared(BestTourCost)
     {
-        // printf("%d\n",omp_get_thread_num());
-
         int tid = omp_get_thread_num();
 
+        clean[tid] = 0;
         queue[tid] = queue_create(compare);
         Path *current_path;
-        int flag = 0, pop_counter = 0;
+        int flag = 0, pop_counter = 0, count = 0;
         
         if (queue[tid] == NULL) {
             /* All needed frees and exits in error */
@@ -83,14 +84,9 @@ Solution *tsp_omp(Inputs *input) {
         }
 
 
-        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < omp_get_num_threads())) {
-
-            // printf("%d\n",omp_get_thread_num());
-
-            // printf("Thread %d\n", omp_get_thread_num());
-            // printf("queuesize %ld\n", queue->size);
+        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads())) {
             current_path = queue_pop(queue[tid]);
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
             free_path(current_path);    
         }
 
@@ -98,44 +94,34 @@ Solution *tsp_omp(Inputs *input) {
             #pragma omp atomic
                 exit_global += 1;
         }
-        //printf("1: Thread: %d, flag = %d, queue[tid]-size = %ld\n",omp_get_thread_num(), flag, queue[tid]->size);
-        //printf("exit = %d\n", exit_global);
 
         #pragma omp barrier
 
         if ((exit_global != 1)) {
-                // printf("%d\n",omp_get_thread_num());
-
             if (queue[tid]->size != 0) {
-                //printf("Olá, sou a thread %d\n", omp_get_thread_num());
                 for (int i = 0 ; i < omp_get_num_threads(); i++) {
                     new_path[i] = queue_pop(queue[tid]);
                 }
             }
             #pragma omp barrier
             
-            //printf("2: Thread: %d, flag = %d, queue[tid]-size = %ld\n",omp_get_thread_num(), flag, queue[tid]->size);
-
             #pragma omp for
             for (int i = 0 ; i < omp_get_num_threads(); i++) {
                 queue_push(queue[tid], new_path[i]);
-                // printf("%d\n",omp_get_thread_num());
-
             }
-
-            //printf("3: Thread: %d, flag = %d, queue[tid]-size = %ld\n",omp_get_thread_num(), flag, queue[tid]->size);
-
         }
-
+        clean[tid] = 0;
         while ((queue[tid]->size != 0) && (flag != 1)) {
-
-            // printf("%d\n",omp_get_thread_num());
-
-            // printf("%d\n", omp_get_thread_num());
             current_path = queue_pop(queue[tid]);
             pop_counter++;
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
             free_path(current_path);
+
+            // if (clean[tid] == 1) {
+            //     queue_clean(queue[tid], BestTourCost);
+            //     clean[tid] = 0;
+            // }
+
             if (whistle != -1) { //flag tem o numero da thread que precisa de uma thread
                 if (whistle == global_tid) {
                     if (global_tid < omp_get_num_threads() - 1) {
@@ -149,17 +135,8 @@ Solution *tsp_omp(Inputs *input) {
                 if (tid == global_tid) {
                     #pragma omp critical 
                     {
-                        //printf("Thread %d vai mandar um push para o whistle %d\n", tid, whistle);
-                        //printf("Thread %d queue size %d\n", tid, queue[tid]->size);
-                        //printf("Thread %d queue size %d\n", whistle, queue[whistle]->size);
                         if (queue[tid]->size != 0 && whistle != -1) {
-                                
-                            // int distribute = 1 + queue[tid]->size / (omp_get_num_threads() * 8);
-                            // int distribute = 2;
-                            // for (int ii = 0; ii < distribute && queue[tid]->size != 0; ii++) {
                             queue_push(queue[whistle], queue_pop(queue[tid]));
-                            // }
-                            // global_tid = 0;
                             whistle = -1;  
                         }
                         else {
@@ -176,8 +153,6 @@ Solution *tsp_omp(Inputs *input) {
             }
             if (!((queue[tid]->size != 0) && (flag != 1))) {
                 
-                // printf("%d\n",omp_get_thread_num());
-                
                 while (queue[tid]->size != 0) {
                     free_path(queue_pop(queue[tid]));
                 }
@@ -190,50 +165,32 @@ Solution *tsp_omp(Inputs *input) {
                     }
                 }
 
-                int count = 0;
-                while(whistle == tid) {
-                    
-                    // printf("1: %d\n",omp_get_thread_num());
-                    // printf("whistle = %d\n", whistle);
-                    
+                
+                while(whistle == tid && flag != 1) {
+                                        
                     count = 0;
-                    for (int q = 0; q < omp_get_num_threads(); q++){
-                        // printf("size = %d\n", queue[q]->size);
-                        if (queue[q]->size != 0) {
+
+                    for (int k = 0; k < omp_get_num_threads(); k++){
+                        if (queue[k]->size != 0) {
                             count = 1;
                             break;
                         }
                     }
-                    if (count == 0) {
+                    if (count != 1) {
                         break;
                     }
                 }
 
-                // if (whistle != -1) {
-                // printf("Thread %d \t whistle = %d \t count = %d, queue->size = %ld\n", tid, whistle, count, queue[tid]->size);
-                // }
-
                 if (queue[tid]->size != 0 || count != 0) {
                    flag = 0; 
-                }
-                
-                // #pragma omp critical 
-                // {
-                //     whistle = -1;
-                // }
-                
+                }             
             }    
         }
-        
-
-        
 
         while (queue[tid]->size != 0) {
             free_path(queue_pop(queue[tid]));
         }
 
-        printf("Thread %d, pop_counter = %d\n", omp_get_thread_num(), pop_counter);
-        
         #pragma omp barrier
         /* Frees auxiliar structures */
         queue_delete(queue[tid]);
@@ -250,7 +207,7 @@ Solution *tsp_omp(Inputs *input) {
     return NULL;
 }
 
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int *clean) {
     int i = 0;
     int *isInTour, *tour;
     double newBound = 0, aux_distance = 0;
@@ -267,7 +224,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         *flag = 2;
         error();
     }
-    //#pragma omp barrier
+
 
     /* Tour complete, check if it is best */
     if (get_length(current_path) == n_cities && *flag == 0) { 
@@ -281,8 +238,11 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                 set_BestTourCost(sol, *BestTourCost);
             }
 
+            // for (int jj = 0; jj < omp_get_num_threads(); jj++) {
+            //     clean[jj] = 1;
+            // }
+
         }
-        
 
     }
     
@@ -340,7 +300,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         }
         
     }
-    // free_path(current_path);
+
     free_safe(isInTour);
 
     return;

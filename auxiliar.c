@@ -19,6 +19,8 @@
 
 #include "auxiliar.h"
 
+#define SWAP(x, y) void* tmp = x; x = y; y = tmp;
+
 /**********************************************************************************
 * parse_inputs()
 *
@@ -96,7 +98,8 @@ void ValidInputFileName(char *name) {
 	if (name == NULL) return;
 
     char *extension = ".in";
-    int i = 0, file_size = 0;
+    size_t i = 0;
+	size_t file_size = 0;
 
     file_size = strlen(name);
 
@@ -465,4 +468,19 @@ void *free_safe (void *aux) {
         free(aux);
     }
     return NULL;
+}
+
+// Return the element with the lowest value in the queue, after removing it.
+void queue_clean(priority_queue_t *queue, double BestTourCost)
+{
+    if(queue->size == 0) return;
+	
+    for (size_t i = queue->size - 1; i > (size_t) 0; i--) {
+        if (get_bound(queue->buffer[i]) > BestTourCost + 1) {
+            SWAP(queue->buffer[i], queue->buffer[queue->size - 1]);
+            free_path(queue->buffer[queue->size - 1]);
+            queue->size--;
+        }
+    }
+    return;
 }

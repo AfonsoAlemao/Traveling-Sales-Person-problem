@@ -45,8 +45,6 @@ int main(int argc, char *argv[]) {
 
     exec_time = -omp_get_wtime();
 
-    //solution = tsp(input);
-
     solution = tsp_omp(input); 
 
     exec_time += omp_get_wtime();
