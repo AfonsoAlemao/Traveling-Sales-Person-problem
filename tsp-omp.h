@@ -21,7 +21,7 @@
 #include "queue.h"
 
 Solution *tsp_omp(Inputs *);
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int *clean);
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs *input, Solution *sol, Path *current_path, int *flag);
 #endif
 
 
