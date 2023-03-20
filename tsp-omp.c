@@ -18,7 +18,7 @@
 
 #include "tsp-omp.h"
 
-#define N_THREADS 12
+#define N_THREADS 32
 
 /**********************************************************************************
 * tsp_omp()
@@ -58,10 +58,11 @@ Solution *tsp_omp(Inputs *input) {
 
     set_bound(initial_path, InitialLowerBound(input));
 
-    
     Path *new_path[N_THREADS];
-    int exit_global = 0, clean[N_THREADS], enable_whistle = 0;
+    int exit_global = 0, clean[N_THREADS];
     priority_queue_t *queue[N_THREADS];
+
+    int density = get_n_edges(input) / get_n_cities(input);
 
     omp_set_num_threads(N_THREADS);
     #pragma omp parallel shared(BestTourCost)
@@ -83,8 +84,7 @@ Solution *tsp_omp(Inputs *input) {
             queue_push(queue[tid], initial_path);
         }
 
-
-        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads())) {
+        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * density * 0.8)) {
             current_path = queue_pop(queue[tid]);
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
             free_path(current_path);    
@@ -110,13 +110,9 @@ Solution *tsp_omp(Inputs *input) {
                 queue_push(queue[tid], new_path[i]);
             }
         }
+
         clean[tid] = 0;
         while ((queue[tid]->size != 0) && (flag != 1)) {
-            if (queue[tid]->size > 2000000 && enable_whistle == 0) {
-                #pragma omp atomic
-                    enable_whistle += 1;
-            }
-
             current_path = queue_pop(queue[tid]);
             pop_counter++;
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
@@ -127,71 +123,68 @@ Solution *tsp_omp(Inputs *input) {
             //     clean[tid] = 0;
             // }
 
-            if (enable_whistle == 0) {
-                if (whistle != -1) { //flag tem o numero da thread que precisa de uma thread
-                    if (whistle == global_tid) {
-                        if (global_tid < omp_get_num_threads() - 1) {
-                            global_tid += 1;
-                        }
-                        else {
-                            global_tid = 0;
-                        }
+            if (whistle != -1) { //flag tem o numero da thread que precisa de uma thread
+                if (whistle == global_tid) {
+                    if (global_tid < omp_get_num_threads() - 1) {
+                        global_tid += 1;
                     }
-                    
-                    if (tid == global_tid) {
-                        #pragma omp critical 
-                        {
-                            if (queue[tid]->size != 0 && whistle != -1) {
-                                queue_push(queue[whistle], queue_pop(queue[tid]));
-                                whistle = -1;  
-                            }
-                            else {
-                                if (global_tid < omp_get_num_threads() - 1) {
-                                    global_tid += 1;
-                                }
-                                else {
-                                    global_tid = 0;
-                                }
-                                
-                            } 
-                        }
+                    else {
+                        global_tid = 0;
                     }
                 }
-                if (!((queue[tid]->size != 0) && (flag != 1))) {
-                    
-                    while (queue[tid]->size != 0) {
-                        free_path(queue_pop(queue[tid]));
-                    }
-
-                    //thread vazia
+                
+                if (tid == global_tid) {
                     #pragma omp critical 
                     {
-                        if (whistle == -1) {
-                            whistle = tid;
+                        if (queue[tid]->size != 0 && whistle != -1) {
+                            queue_push(queue[whistle], queue_pop(queue[tid]));
+                            whistle = -1;  
                         }
-                    }
-
-                    
-                    while(whistle == tid && queue[tid]->size != 0) {
-                                
-                        count = 0;
-
-                        for (int k = 0; k < omp_get_num_threads(); k++){
-                            if (queue[k]->size != 0) {
-                                count = 1;
-                                break;
+                        else {
+                            if (global_tid < omp_get_num_threads() - 1) {
+                                global_tid += 1;
                             }
-                        }
-                        if (count != 1) {
+                            else {
+                                global_tid = 0;
+                            }
+                            
+                        } 
+                    }
+                }
+            }
+            if (!((queue[tid]->size != 0) && (flag != 1))) {
+                
+                while (queue[tid]->size != 0) {
+                    free_path(queue_pop(queue[tid]));
+                }
+
+                //thread vazia
+                #pragma omp critical 
+                {
+                    if (whistle == -1) {
+                        whistle = tid;
+                    }
+                }
+
+                while(whistle == tid && queue[tid]->size != 0) {
+                              
+                    count = 0;
+
+                    for (int k = 0; k < omp_get_num_threads(); k++){
+                        if (queue[k]->size != 0) {
+                            count = 1;
                             break;
                         }
                     }
+                    if (count != 1) {
+                        break;
+                    }
+                }
 
-                    if (queue[tid]->size != 0 || count != 0) {
-                    flag = 0; 
-                    }             
-                }    
-            }
+                if (queue[tid]->size != 0 || count != 0) {
+                   flag = 0; 
+                }             
+            }    
         }
 
         while (queue[tid]->size != 0) {
