@@ -1,4 +1,4 @@
-TARGET = tsp
+TARGET = tsp-omp
 CC = gcc
 CFLAGS = -Wall -fopenmp -O3
 
