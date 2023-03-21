@@ -118,7 +118,7 @@ Solution *tsp_omp(Inputs *input) {
             #pragma omp barrier
             queue_push(queue[tid], new_path[tid]);
             if (twicee) {
-                queue_push(queue[tid], new_path[omp_get_num_threads() * 2 - tid - 1]);
+                queue_push(queue[tid], new_path[omp_get_num_threads() + tid]);
             }
         }
 
