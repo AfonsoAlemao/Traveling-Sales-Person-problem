@@ -62,7 +62,7 @@ Solution *tsp_omp(Inputs *input) {
     int exit_global = 0;
     priority_queue_t *queue[N_THREADS];
 
-    int density = get_n_edges(input) / get_n_cities(input);
+    int twice_density = get_n_edges(input) / get_n_cities(input);
 
     omp_set_num_threads(N_THREADS);
     #pragma omp parallel shared(BestTourCost)
@@ -83,7 +83,7 @@ Solution *tsp_omp(Inputs *input) {
             queue_push(queue[tid], initial_path);
         }
 
-        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * density * 0.8)) {
+        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * twice_density * 0.8)) {
             current_path = queue_pop(queue[tid]);
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);    
