@@ -149,7 +149,6 @@ Solution *tsp_omp(Inputs *input) {
                     free_path(queue_pop(queue[tid]));
                 }
 
-                //thread vazia
                 #pragma omp critical 
                 {
                     if (whistle == -1) {
