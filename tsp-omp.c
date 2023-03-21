@@ -40,6 +40,11 @@ Solution *tsp_omp(Inputs *input) {
     double BestTourCost = get_max_value(input);
     Path *initial_path;
     Solution *sol;
+    int twice_density = get_n_edges(input) / get_n_cities(input);
+    Path *new_path[N_THREADS * 2];
+    int exit_global = 0, twicee = 0;
+    priority_queue_t *queue[N_THREADS];
+
 
     initial_path = create_path(n_cities);
     if (initial_path == NULL) {
@@ -58,12 +63,10 @@ Solution *tsp_omp(Inputs *input) {
 
     set_bound(initial_path, InitialLowerBound(input));
 
-    Path *new_path[N_THREADS];
-    int exit_global = 0;
-    priority_queue_t *queue[N_THREADS];
-
-    int twice_density = get_n_edges(input) / get_n_cities(input);
-
+    if (twice_density * 0.8 < 1) {
+        twice_density = 1;
+    }
+    
     omp_set_num_threads(N_THREADS);
     #pragma omp parallel shared(BestTourCost)
     {
@@ -98,15 +101,32 @@ Solution *tsp_omp(Inputs *input) {
 
         if ((exit_global != 1)) {
             if (queue[tid]->size != 0) {
-                for (int i = 0 ; i < omp_get_num_threads(); i++) {
-                    new_path[i] = queue_pop(queue[tid]);
+                if (queue[tid]->size > omp_get_num_threads() * 2 + 2) {
+                    #pragma omp atomic
+                        twicee += 1;
+                    for (int i = 0 ; i < omp_get_num_threads() * 2; i++) {  
+                        new_path[i] = queue_pop(queue[tid]);
+                    }
+                }
+                else {
+                    for (int i = 0 ; i < omp_get_num_threads(); i++) {
+                        new_path[i] = queue_pop(queue[tid]);
+                    }
                 }
             }
+            
             #pragma omp barrier
             
             #pragma omp for
             for (int i = 0 ; i < omp_get_num_threads(); i++) {
                 queue_push(queue[tid], new_path[i]);
+            }
+
+            if (twicee) {
+                #pragma omp for
+                for (int i = omp_get_num_threads() ; i < omp_get_num_threads() * 2; i++) {
+                    queue_push(queue[tid], new_path[i]);
+                }
             }
         }
 
