@@ -116,17 +116,9 @@ Solution *tsp_omp(Inputs *input) {
             }
             
             #pragma omp barrier
-            
-            #pragma omp for
-            for (int i = 0 ; i < omp_get_num_threads(); i++) {
-                queue_push(queue[tid], new_path[i]);
-            }
-
+            queue_push(queue[tid], new_path[tid]);
             if (twicee) {
-                #pragma omp for
-                for (int i = omp_get_num_threads() ; i < omp_get_num_threads() * 2; i++) {
-                    queue_push(queue[tid], new_path[i]);
-                }
+                queue_push(queue[tid], new_path[omp_get_num_threads() * 2 - tid - 1]);
             }
         }
 
