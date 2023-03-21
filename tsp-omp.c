@@ -18,7 +18,7 @@
 
 #include "tsp-omp.h"
 
-#define N_THREADS 12
+#define MAX_N_THREADS 64
 
 /**********************************************************************************
 * tsp_omp()
@@ -41,9 +41,9 @@ Solution *tsp_omp(Inputs *input) {
     Path *initial_path;
     Solution *sol;
     int twice_density = get_n_edges(input) / get_n_cities(input);
-    Path *new_path[N_THREADS * 4];
-    int exit_global = 0, twicee = 0, three = 0, four = 0;
-    priority_queue_t *queue[N_THREADS];
+    Path *new_path[MAX_N_THREADS * 2];
+    int exit_global = 0, twicee = 0;
+    priority_queue_t *queue[MAX_N_THREADS];
 
 
     initial_path = create_path(n_cities);
@@ -67,7 +67,7 @@ Solution *tsp_omp(Inputs *input) {
         twice_density = 1;
     }
     
-    omp_set_num_threads(N_THREADS);
+    //omp_set_num_threads(MAX_N_THREADS);
     #pragma omp parallel shared(BestTourCost)
     {
         int tid = omp_get_thread_num();
@@ -99,23 +99,9 @@ Solution *tsp_omp(Inputs *input) {
 
         #pragma omp barrier
 
-        if ((exit_global != 1)) {
+        if (exit_global != 1) {
             if (queue[tid]->size != 0) {
-                // if (queue[tid]->size > omp_get_num_threads() * 4 + 4) {
-                //     #pragma omp atomic
-                //         four += 1;
-                //     for (int i = 0 ; i < omp_get_num_threads() * 4; i++) {  
-                //         new_path[i] = queue_pop(queue[tid]);
-                //     }
-                // }
-                if (queue[tid]->size > omp_get_num_threads() * 3 + 3) {
-                    #pragma omp atomic
-                        three += 1;
-                    for (int i = 0 ; i < omp_get_num_threads() * 3; i++) {  
-                        new_path[i] = queue_pop(queue[tid]);
-                    }
-                }
-                else if (queue[tid]->size > omp_get_num_threads() * 2 + 2) {
+                if (queue[tid]->size > omp_get_num_threads() * 2 + 2) {
                     #pragma omp atomic
                         twicee += 1;
                     for (int i = 0 ; i < omp_get_num_threads() * 2; i++) {  
@@ -134,15 +120,6 @@ Solution *tsp_omp(Inputs *input) {
             if (twicee) {
                 queue_push(queue[tid], new_path[omp_get_num_threads() + tid]);
             }
-            else if (three) {
-                queue_push(queue[tid], new_path[omp_get_num_threads() + tid]);
-                queue_push(queue[tid], new_path[omp_get_num_threads() * 2 + tid]);
-            }
-            // else if (four) {
-            //     queue_push(queue[tid], new_path[omp_get_num_threads() + tid]);
-            //     queue_push(queue[tid], new_path[omp_get_num_threads() * 2 + tid]);
-            //     queue_push(queue[tid], new_path[omp_get_num_threads() * 3 + tid]);
-            // }
         }
 
         while ((queue[tid]->size != 0) && (flag != 1)) {
@@ -191,7 +168,7 @@ Solution *tsp_omp(Inputs *input) {
                     }
                 }
 
-                while(whistle == tid && queue[tid]->size != 0) {
+                while (whistle == tid && queue[tid]->size != 0) {
                               
                     count = 0;
 
