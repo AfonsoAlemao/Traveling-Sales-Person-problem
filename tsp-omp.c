@@ -59,7 +59,7 @@ Solution *tsp_omp(Inputs *input) {
     set_bound(initial_path, InitialLowerBound(input));
 
     Path *new_path[N_THREADS];
-    int exit_global = 0, clean[N_THREADS];
+    int exit_global = 0;
     priority_queue_t *queue[N_THREADS];
 
     int density = get_n_edges(input) / get_n_cities(input);
@@ -69,10 +69,9 @@ Solution *tsp_omp(Inputs *input) {
     {
         int tid = omp_get_thread_num();
 
-        clean[tid] = 0;
         queue[tid] = queue_create(compare);
         Path *current_path;
-        int flag = 0, pop_counter = 0, count = 0;
+        int flag = 0, count = 0;
         
         if (queue[tid] == NULL) {
             /* All needed frees and exits in error */
@@ -86,7 +85,7 @@ Solution *tsp_omp(Inputs *input) {
 
         while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * density * 0.8)) {
             current_path = queue_pop(queue[tid]);
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);    
         }
 
@@ -111,17 +110,10 @@ Solution *tsp_omp(Inputs *input) {
             }
         }
 
-        clean[tid] = 0;
         while ((queue[tid]->size != 0) && (flag != 1)) {
             current_path = queue_pop(queue[tid]);
-            pop_counter++;
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, clean);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);
-
-            // if (clean[tid] == 1) {
-            //     queue_clean(queue[tid], BestTourCost);
-            //     clean[tid] = 0;
-            // }
 
             if (whistle != -1) { //flag tem o numero da thread que precisa de uma thread
                 if (whistle == global_tid) {
@@ -147,7 +139,6 @@ Solution *tsp_omp(Inputs *input) {
                             else {
                                 global_tid = 0;
                             }
-                            
                         } 
                     }
                 }
@@ -197,8 +188,6 @@ Solution *tsp_omp(Inputs *input) {
         free_safe(queue[tid]);
     }
 
-    
-
     /* Check if a valid solution was found */
     if (valid_BestTour(sol, n_cities)) {
         return sol;
@@ -207,7 +196,7 @@ Solution *tsp_omp(Inputs *input) {
     return NULL;
 }
 
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int *clean) {
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
     int i = 0;
     int *isInTour, *tour;
     double newBound = 0, aux_distance = 0;
@@ -225,7 +214,6 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         error();
     }
 
-
     /* Tour complete, check if it is best */
     if (get_length(current_path) == n_cities && *flag == 0) { 
         aux_distance = distance(get_node(current_path), 0, input);
@@ -237,13 +225,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                 *BestTourCost = get_cost(current_path) + aux_distance;
                 set_BestTourCost(sol, *BestTourCost);
             }
-
-            // for (int jj = 0; jj < omp_get_num_threads(); jj++) {
-            //     clean[jj] = 1;
-            // }
-
         }
-
     }
     
     else if (*flag == 0) {
@@ -257,8 +239,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                 isInTour[tour[i]] = 0;
             }
         }
-    
-        
+
         for (i = 0; i < n_cities; i++) {
             /* Connection does not exist */
             if (distance(get_node(current_path), i, input) < 0) {
@@ -297,8 +278,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
             /* Insert it in queue */
             queue_push(queue, new_path);
             
-        }
-        
+        }  
     }
 
     free_safe(isInTour);
