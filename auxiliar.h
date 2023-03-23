@@ -17,7 +17,6 @@
 #define _AUXILIAR_H
 
 #include "structs.h"
-#include "queue.h"
 
 /* Methods */
 

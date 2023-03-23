@@ -18,9 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "queue.h"
 #include "tsp-omp.h"
-#include "auxiliar.h"
 
 /**********************************************************************************
 * main()

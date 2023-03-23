@@ -7,7 +7,7 @@
 *
 * Name: structs.c
 *
-* Description: Manages the auxiliar structures of information.
+* Description: Manages the auxiliary structures of information.
 *
 * Comments:
 *
@@ -18,7 +18,6 @@
 #include <string.h>
 
 #include "structs.h"
-#include "auxiliar.h"
 
 struct _solution {
     int *BestTour;
