@@ -37,13 +37,13 @@
 Solution *tsp_omp(Inputs *input) {
     if (input == NULL) return NULL;
     int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0;
-    double BestTourCost = get_max_value(input), dealer = 0;
+    double BestTourCost = get_max_value(input);
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
     priority_queue_t *queue[MAX_N_THREADS];
         
     /* density = edges / (2 * nodes) */
-    double twice_density = get_n_edges(input) / get_n_cities(input);
+    int twice_density = get_n_edges(input) / get_n_cities(input);
 
     initial_path = create_path(n_cities);
     if (initial_path == NULL) {
@@ -65,10 +65,7 @@ Solution *tsp_omp(Inputs *input) {
     /* Relevant computation to secure that further ahead we
     can evenly distribute elements by the queue of each thread. */
     if (twice_density * 0.8 < 1) {
-        dealer = 1;
-    }
-    else {
-        dealer = twice_density * 0.8;
+        twice_density = 1;
     }
     
     /* Creates N parallel threads. All threads execute the subsequent block.
@@ -102,7 +99,7 @@ Solution *tsp_omp(Inputs *input) {
         - the queue size is large enough to evenly distribute elements (1 or 2) among the queues of the 
         other threads. This queue size and the number of distributed elements were optimized through a 
         calculation that uses the density of the graph in question.  */
-        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * dealer)) {
+        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * twice_density * 0.8)) {
             current_path = queue_pop(queue[tid]);
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);  
@@ -145,7 +142,7 @@ Solution *tsp_omp(Inputs *input) {
 
 
             /* Distribute the elements: twice > 0 means that 2 elements will be distributed for each thread queue, 
-            otherwis distribute 1.
+            otherwise distribute 1.
             The distribution of the elements is made taking into consideration a balance relative to 
             the priority of each element: threads will receive the elements with highest priorities. */
             queue_push(queue[tid], new_path[tid]);
