@@ -345,7 +345,6 @@ double InitialLowerBound(Inputs *inputs) {
 	if (inputs == NULL) return -1;
 	double result = 0;
 
-	//#pragma omp parallel for schedule(static, 1)
 	for (int i = 0; i < get_n_cities(inputs); i++) {
 		result += get_min1(i, inputs) + get_min2(i, inputs);
 	}

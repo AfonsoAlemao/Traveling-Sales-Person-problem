@@ -22,6 +22,7 @@
 
 Solution *tsp_omp(Inputs *);
 void work(priority_queue_t *, int , double *, Inputs* , Solution *, Path*, int *);
+
 #endif
 
 

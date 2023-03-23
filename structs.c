@@ -247,7 +247,6 @@ Solution *create_solution(int n_cities) {
         return NULL;
     }
 
-    //#pragma omp for schedule(static, 1)
 	for (int i = 0; i < n_cities + 1; i++) {
 		new_solution->BestTour[i] = -1;
 	}
@@ -357,7 +356,6 @@ Path *create_path(int n_cities) {
 
     new_path->Tour[0] = 0;
     
-    //#pragma omp for schedule(static, 1)
 	for (int i = 1; i < n_cities + 1; i++) {
 		new_path->Tour[i] = -1;
 	}
@@ -429,7 +427,6 @@ void set_Tour_item(int index, Path *got_path, int city, int n_cities) {
 void set_Tour(Path *got_path, int *tour, int n_cities) {
     if (got_path == NULL) return;
     
-    //#pragma omp for schedule(static, 1)
     for (int i = 0; i < n_cities + 1; i++) {
         set_Tour_item(i, got_path, tour[i], n_cities);
     }
