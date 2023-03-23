@@ -98,17 +98,17 @@ void ValidInputFileName(char *name) {
 	if (name == NULL) return;
 
     char *extension = ".in";
-    size_t i = 0;
-	size_t file_size = 0;
+    int i = 0;
+	int file_size = 0;
 
     file_size = strlen(name);
 
     /* File without extension */
-    if (file_size < strlen(extension)) {
+    if (file_size < (int) strlen(extension)) {
 		error();
 	}
 	/* Check the extension */
-	for (i = 0; i < strlen(extension); i++) {
+	for (i = 0; i < (int) strlen(extension); i++) {
 		if (extension[i] != name[file_size - strlen(extension) + i]) {
 			error();
 		}

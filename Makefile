@@ -1,6 +1,6 @@
 TARGET = tsp-omp
 CC = gcc
-CFLAGS = -Wall -fopenmp -g
+CFLAGS = -Wall -fopenmp -O3
 
 default: $(TARGET)
 all: default

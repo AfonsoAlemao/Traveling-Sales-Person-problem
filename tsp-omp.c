@@ -36,14 +36,14 @@
 
 Solution *tsp_omp(Inputs *input) {
     if (input == NULL) return NULL;
-    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0;
-    double BestTourCost = get_max_value(input), dealer = 0;
+    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0, dealer = 0;
+    double BestTourCost = get_max_value(input);
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
     priority_queue_t *queue[MAX_N_THREADS];
         
     /* density = edges / (2 * nodes) */
-    double twice_density = get_n_edges(input) / get_n_cities(input);
+    int twice_density = get_n_edges(input) / get_n_cities(input);
 
     initial_path = create_path(n_cities);
     if (initial_path == NULL) {
@@ -62,20 +62,11 @@ Solution *tsp_omp(Inputs *input) {
 
     set_bound(initial_path, InitialLowerBound(input));
 
-    /* Relevant computation to secure that further ahead we
-    can evenly distribute elements by the queue of each thread. */
-    if (twice_density * 0.8 < 1) {
-        dealer = 1;
-    }
-    else {
-        dealer = twice_density * 0.8;
-    }
-    
     /* Creates N parallel threads. All threads execute the subsequent block.
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
     /* BestTourCost is a shared variable that exists in a single location 
     and all threads can read and write it. */
-    #pragma omp parallel shared(BestTourCost)
+    #pragma omp parallel shared(BestTourCost, dealer)
     {
         /* Each thread gets its thread id. */
         int tid = omp_get_thread_num();
@@ -89,11 +80,20 @@ Solution *tsp_omp(Inputs *input) {
             /* Exits in error */
             error();
         }
-
+ 
         /* Single thread execute this region: the master thread. The 1st element goes to a single thread's queue. */
         #pragma omp master
         {
             queue_push(queue[tid], initial_path);
+        
+            /* Relevant computation to secure that further ahead we
+            can evenly distribute elements by the queue of each thread. */
+            if (((int) (twice_density * 0.8)) < 1) {
+                dealer = omp_get_num_threads();
+            }
+            else {
+                dealer = (int) (omp_get_num_threads() * twice_density * 0.8);
+            }
         }
 
         /* Process (Multiple: Pop + Work) the queue that has received first element until:
@@ -102,7 +102,7 @@ Solution *tsp_omp(Inputs *input) {
         - the queue size is large enough to evenly distribute elements (1 or 2) among the queues of the 
         other threads. This queue size and the number of distributed elements were optimized through a 
         calculation that uses the density of the graph in question.  */
-        while ((queue[tid]->size != 0) && (flag != 1) && (queue[tid]->size < (size_t) omp_get_num_threads() * dealer)) {
+        while (((int) queue[tid]->size != 0) && (flag != 1) && ((int) queue[tid]->size < dealer)) {
             current_path = queue_pop(queue[tid]);
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);  
@@ -111,7 +111,7 @@ Solution *tsp_omp(Inputs *input) {
         #pragma omp master
         {
             /* Checks if all the processing of the graph was previously done. */
-            if (flag == 1 || queue[tid]->size == 0) {
+            if (flag == 1 || (int) queue[tid]->size == 0) {
                 /* Guarantees that reading and writing of one memory location is atomic. */
                 #pragma omp atomic
                     exit_global += 1;
@@ -125,10 +125,10 @@ Solution *tsp_omp(Inputs *input) {
         other threads. */
         if (exit_global != 1) {
             /* Check which thread have the elements to distribute. */
-            if (queue[tid]->size != 0) {
+            if ((int) queue[tid]->size != 0) {
                 /* Check if the number of elements to distribute allows to distribute 
                 1 or 2 elements per queue thread. Then pop that elements. */
-                if (queue[tid]->size > omp_get_num_threads() * 2 + 2) {
+                if ((int) queue[tid]->size > omp_get_num_threads() * 2 + 2) {
                     #pragma omp atomic
                         twice += 1;
                     for (int i = 0 ; i < omp_get_num_threads() * 2; i++) {  
@@ -157,7 +157,7 @@ Solution *tsp_omp(Inputs *input) {
 
         /* Process the queue of each thread until the program ends: 
         flag = 1 (only irrelevant elements in queues) or queue size = 0 for all threads. */
-        while ((queue[tid]->size != 0) && (flag != 1)) {
+        while (((int) queue[tid]->size != 0) && (flag != 1)) {
             current_path = queue_pop(queue[tid]);
             work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
             free_path(current_path);
@@ -190,7 +190,7 @@ Solution *tsp_omp(Inputs *input) {
                     other thread is executing a critical region with the same name. */
                     #pragma omp critical 
                     {
-                        if (queue[tid]->size != 0 && whistle != -1) {
+                        if ((int) queue[tid]->size != 0 && whistle != -1) {
                             queue_push(queue[whistle], queue_pop(queue[tid]));
                             whistle = -1;  
                         }
@@ -207,10 +207,10 @@ Solution *tsp_omp(Inputs *input) {
             }
 
             /* Section dedicated to the asking / receiving of elements by the whistling thread. */
-            if (!((queue[tid]->size != 0) && (flag != 1))) {
+            if (!(((int) queue[tid]->size != 0) && (flag != 1))) {
                 
                 /* If the whistle thread have only irrelevant elements in queue, free them. */
-                while (queue[tid]->size != 0) {
+                while ((int) queue[tid]->size != 0) {
                     free_path(queue_pop(queue[tid]));
                 }
 
@@ -227,7 +227,7 @@ Solution *tsp_omp(Inputs *input) {
                     count = 0;
 
                     for (int k = 0; k < omp_get_num_threads(); k++){
-                        if (queue[k]->size != 0) {
+                        if ((int) queue[k]->size != 0) {
                             count = 1;
                             break;
                         }
@@ -238,14 +238,14 @@ Solution *tsp_omp(Inputs *input) {
                 }
 
                 /* Check if the whistling thread received any element. */
-                if (queue[tid]->size != 0 || count != 0) {
+                if ((int) queue[tid]->size != 0 || count != 0) {
                    flag = 0; 
                 }             
             }    
         }
 
         /* Free the irrelevant elements in queue. */
-        while (queue[tid]->size != 0) {
+        while ((int) queue[tid]->size != 0) {
             free_path(queue_pop(queue[tid]));
         }
 
