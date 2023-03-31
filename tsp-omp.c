@@ -286,21 +286,13 @@ Solution *tsp_omp(Inputs *input) {
 **********************************************************************************/
 
 void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
-    int i = 0, *tour;
-    bool *isInTour;
+    int i = 0;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
     //printf("293: Me: %d\n", get_node(current_path));
     /* Checks if all remaining nodes in queue are worse than BestTourCost. */
     if (get_bound(current_path) >= *BestTourCost) {
         *flag = 1;
-    }
-
-    /* isInTour will mark the elements in the current tour. */
-    isInTour = (bool *) malloc(n_cities * sizeof(bool));
-    if (isInTour == NULL) {
-        *flag = 2;
-        error();
     }
 
     /* Tour complete, check if it is best. */
@@ -321,11 +313,6 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
     }
     
     else if (*flag == 0) {
-        tour = get_Tour(current_path);
-
-        /* isInTour mark the elements in the current tour. */
-        InitializeIsInTour(isInTour, n_cities);
-
         for (i = 0; i < n_cities; i++) {
             // cities & 1<<n
             /* Connection does not exist. */
@@ -372,8 +359,6 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         }  
         //printf("\n\n");
     }
-
-    free_safe(isInTour);
 
     return;
 }
