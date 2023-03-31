@@ -444,7 +444,7 @@ void InitializeIsInTour(bool *isInTour, int n_cities) {
 	if (isInTour == NULL) return;
 
 	for (int i = 0; i < n_cities; i++) {
-		isInTour[i] = 1;
+		isInTour[i] = true;
 	}
 	return;
 }
