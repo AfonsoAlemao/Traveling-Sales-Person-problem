@@ -57,6 +57,7 @@ double get_bound(Path *);
 int get_length(Path *);
 int get_node(Path *);
 void print_path(Path *got_path, int n_cities);
+long get_isInTour(Path *got_path);
 
 /* Setters for struct Inputs */
 void set_ajd_matrix_item(int, int, Inputs *, double);
@@ -77,5 +78,6 @@ void set_cost(Path *, double);
 void set_bound(Path *, double);
 void set_length(Path *, int);
 void set_node(Path *, int);
+void set_isInTour(Path *got_path, int index, long isInTour);
 
 #endif

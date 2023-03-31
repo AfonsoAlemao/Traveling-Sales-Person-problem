@@ -290,7 +290,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
     bool *isInTour;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
-    
+    //printf("293: Me: %d\n", get_node(current_path));
     /* Checks if all remaining nodes in queue are worse than BestTourCost. */
     if (get_bound(current_path) >= *BestTourCost) {
         *flag = 1;
@@ -327,21 +327,18 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         InitializeIsInTour(isInTour, n_cities);
 
         for (i = 0; i < n_cities; i++) {
-            if (tour[i] != -1) {
-                isInTour[tour[i]] = 0;
-            }
-        }
-
-        for (i = 0; i < n_cities; i++) {
+            // cities & 1<<n
             /* Connection does not exist. */
             if (distance(get_node(current_path), i, input) < 0) {
                 continue;
             }
 
-            /* Check if city in already in the current tour, except for the start city (0). */
-            if (isInTour[i] == 0 && !(i == 0 && get_length(current_path) == n_cities)) {
+            //printf("isInTour: %ld\n", get_isInTour(current_path));
+            if ((1 << i) & get_isInTour(current_path) && !(i == 0 && get_length(current_path) == n_cities)) {
                 continue;
             }
+            //printf("Vou tentar adicionar o %d\n", i);
+
 
             newBound = newLowerBound(input, current_path, i);              
 
@@ -367,10 +364,13 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
             /* newNode ← i */ 
             set_node(new_path, i);
 
+            set_isInTour(new_path, i, get_isInTour(current_path));
+
             /* Insert it in queue. */
             queue_push(queue, new_path);
-            
+            //printf("\n");
         }  
+        //printf("\n\n");
     }
 
     free_safe(isInTour);

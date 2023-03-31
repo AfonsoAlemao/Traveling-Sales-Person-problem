@@ -39,6 +39,7 @@ struct _path {
     double bound;
 	int length;
 	int node;
+    long isInTour;
 };
 
 
@@ -363,6 +364,7 @@ Path *create_path(int n_cities) {
     new_path->bound = 0;
     new_path->length = 1;
     new_path->node = 0;
+    new_path->isInTour = 1;
     return new_path;
 }
 
@@ -399,6 +401,11 @@ int get_length(Path *got_path) {
 int get_node(Path *got_path) {
     if (got_path == NULL) return -1;
     return got_path->node;
+}
+
+long get_isInTour(Path *got_path) {
+    if (got_path == NULL) return -1;
+    return got_path->isInTour;
 }
 
 void print_path(Path *got_path, int n_cities) {
@@ -453,6 +460,15 @@ void set_length(Path *got_path, int length) {
 void set_node(Path *got_path, int node) {
     if (got_path == NULL) return;
     got_path->node = node;
+    return;
+}
+
+void set_isInTour(Path *got_path, int index, long isInTour) {
+    if (got_path == NULL) return;
+
+    //printf("Antigo: %ld, queremos adicionar o %d\n", isInTour, index);
+    got_path->isInTour = isInTour | (1 << index);
+    //printf("After:%ld\n\n\n", got_path->isInTour);
     return;
 }
 
