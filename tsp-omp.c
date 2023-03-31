@@ -145,7 +145,7 @@ Solution *tsp_omp(Inputs *input) {
 
 
             /* Distribute the elements: twice > 0 means that 2 elements will be distributed for each thread queue, 
-            otherwis distribute 1.
+            otherwise distribute 1.
             The distribution of the elements is made taking into consideration a balance relative to 
             the priority of each element: threads will receive the elements with highest priorities. */
             queue_push(queue[tid], new_path[tid]);
@@ -286,7 +286,8 @@ Solution *tsp_omp(Inputs *input) {
 **********************************************************************************/
 
 void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
-    int i = 0, *isInTour, *tour;
+    int i = 0, *tour;
+    bool *isInTour;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
     
@@ -296,7 +297,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
     }
 
     /* isInTour will mark the elements in the current tour. */
-    isInTour = (int *) malloc(n_cities * sizeof(int));
+    isInTour = (bool *) malloc(n_cities * sizeof(bool));
     if (isInTour == NULL) {
         *flag = 2;
         error();

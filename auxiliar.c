@@ -440,7 +440,7 @@ char compare (void *a, void *b) {
  *
  ********************************************************************************/
 
-void InitializeIsInTour(int *isInTour, int n_cities) {
+void InitializeIsInTour(bool *isInTour, int n_cities) {
 	if (isInTour == NULL) return;
 
 	for (int i = 0; i < n_cities; i++) {
