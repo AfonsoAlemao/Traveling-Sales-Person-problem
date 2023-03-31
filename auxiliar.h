@@ -28,7 +28,6 @@ double distance(int, int, Inputs *);
 void error();
 void free2d(double **, int);
 void *free_safe (void *);
-void InitializeIsInTour(bool *, int);
 double InitialLowerBound(Inputs *);
 double newLowerBound(Inputs *, Path *, int);
 FILE *OpenFile(char *, char *);

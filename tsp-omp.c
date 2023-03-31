@@ -41,6 +41,8 @@ Solution *tsp_omp(Inputs *input) {
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
     priority_queue_t *queue[MAX_N_THREADS];
+
+    //print_minmaxcity(input, n_cities);
         
     /* density = edges / (2 * nodes) */
     int twice_density = get_n_edges(input) / get_n_cities(input);
@@ -286,7 +288,7 @@ Solution *tsp_omp(Inputs *input) {
 **********************************************************************************/
 
 void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
-    int i = 0;
+    int i = 0, min_city = -1, max_city = -1;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
     //printf("293: Me: %d\n", get_node(current_path));
@@ -313,19 +315,19 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
     }
     
     else if (*flag == 0) {
-        for (i = 0; i < n_cities; i++) {
-            // cities & 1<<n
+        min_city = get_mincity(get_node(current_path), input);
+        max_city = get_maxcity(get_node(current_path), input) + 1;
+        
+        for (i = min_city; i < max_city; i++) {
             /* Connection does not exist. */
             if (distance(get_node(current_path), i, input) < 0) {
                 continue;
             }
 
-            //printf("isInTour: %ld\n", get_isInTour(current_path));
+            /* Check if node is already in tour */
             if ((1 << i) & get_isInTour(current_path) && !(i == 0 && get_length(current_path) == n_cities)) {
                 continue;
             }
-            //printf("Vou tentar adicionar o %d\n", i);
-
 
             newBound = newLowerBound(input, current_path, i);              
 
@@ -355,9 +357,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
 
             /* Insert it in queue. */
             queue_push(queue, new_path);
-            //printf("\n");
         }  
-        //printf("\n\n");
     }
 
     return;

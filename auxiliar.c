@@ -427,28 +427,6 @@ char compare (void *a, void *b) {
 	return 1;
 }
 
-/**********************************************************************************
- * InitializeIsInTour()
- *
- * Arguments: isInTour - tour to be initialized 
- *			  n_cities - number of cities of the graph
- * 
- * Return: (void) 
- *
- * Side effects: (none)
- *
- * Description: Initializes isInTour that marks the elements in the current tour
- *
- ********************************************************************************/
-
-void InitializeIsInTour(bool *isInTour, int n_cities) {
-	if (isInTour == NULL) return;
-
-	for (int i = 0; i < n_cities; i++) {
-		isInTour[i] = true;
-	}
-	return;
-}
 
 /**********************************************************************************
  * free_safe()
