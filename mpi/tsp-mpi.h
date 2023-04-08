@@ -21,7 +21,7 @@
 #include "auxiliar.h"
 #include "queue.h"
 
-Solution *tsp_mpi(Inputs *);
+Solution *tsp_mpi(Inputs *input, int argc, char *argv[]);
 void work(priority_queue_t *, int , double *, Inputs* , Solution *, Path*, int *);
 
 #endif

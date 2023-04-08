@@ -20,6 +20,8 @@
 
 
 #define MAX_N_THREADS 64
+#define MAX_N_PROCS 8
+#define MYTAG 1
 
 /**********************************************************************************
 * tsp_omp()
@@ -35,21 +37,23 @@
 *
 **********************************************************************************/
 
-Solution *tsp_mpi(Inputs *input) {
+Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     if (input == NULL) return NULL;
-    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0, dealer = 0;
     double BestTourCost = get_max_value(input);
-    Path *initial_path, *new_path[MAX_N_THREADS * 2];
-    Solution *sol;
-    priority_queue_t *queue[MAX_N_THREADS];
+    int numprocs, rank, namelen, iam, nt;
+    int twice_density = get_n_edges(input) / get_n_cities(input);
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Get_processor_name(processor_name, &namelen);
-        
-    /* density = edges / (2 * nodes) */
-    int twice_density = get_n_edges(input) / get_n_cities(input);
+
+    Path *initial_path, *new_path[MAX_N_THREADS * 2];
+    Solution *sol;
+    priority_queue_t *queue[MAX_N_THREADS];
+    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0, dealer = 0;
+
+
 
     initial_path = create_path(n_cities);
     if (initial_path == NULL) {
@@ -66,7 +70,93 @@ Solution *tsp_mpi(Inputs *input) {
         error();
     }
 
-    set_bound(initial_path, InitialLowerBound(input));
+    //if (rank == 0) {
+        /* Process elements until it gets enough elements to distribute for the remaining processes */        
+        Path *current_path_p0;
+        int flag_p0 = 0, count_p0 = 0, dealer_p0 = 0;
+        priority_queue_t *queue_p0;
+        Path *initial_path_p0, *new_path_p0[MAX_N_PROCS];
+
+
+        /* Creates a queue for each thread. */
+        queue_p0 = queue_create(compare);
+        if (queue_p0 == NULL) {
+            /* Exits in error */
+            error();
+        }
+
+        set_bound(initial_path_p0, InitialLowerBound(input));
+
+        queue_push(queue_p0, initial_path_p0);
+    
+        /* Relevant computation to secure that further ahead we
+        can evenly distribute elements by the queue of each thread. */
+        if (((int) (twice_density * 0.8)) < 1) {
+            dealer_p0 = numprocs;
+        }
+        else {
+            dealer_p0 = (int) (numprocs * twice_density * 0.8);
+        }
+        
+
+        /* Process (Multiple: Pop + Work) the queue that has received first element until:
+        - the program ends: flag = 1 (only irrelevant elements in queue) or queue[tid]->size = 0 (no more elements)
+        or
+        - the queue size is large enough to evenly distribute elements (1 or 2) among the queues of the 
+        other threads. This queue size and the number of distributed elements were optimized through a 
+        calculation that uses the density of the graph in question.  */
+        while (((int) queue_p0->size != 0) && (flag_p0 != 1) && ((int) queue_p0->size < dealer_p0)) {
+            current_path_p0 = queue_pop(queue_p0);
+            work(queue_p0, n_cities, &BestTourCost, input, sol, current_path_p0, &flag_p0);
+            free_path(current_path_p0);  
+        }
+
+
+        /* Checks if all the processing of the graph was previously done. */
+        if (flag == 1 || (int) queue_p0->size == 0) {
+            /* Guarantees that reading and writing of one memory location is atomic. */
+            exit_global += 1;
+            MPI_Finalize();
+
+            while ((int) queue_p0->size != 0) {
+                free_path(queue_pop(queue_p0));
+            }
+
+            /* Check if a valid solution was found. */
+            if (valid_BestTour(sol, n_cities)) {
+                return sol;
+            }
+            free_solution(sol);
+            return NULL;
+
+        }
+        else {
+            /* Check which thread have the elements to distribute. */
+            /* Check if the number of elements to distribute allows to distribute 
+            1 or 2 elements per queue thread. Then pop that elements. */
+            if ((int) queue_p0->size > numprocs) {
+                for (int i = 0 ; i < numprocs(); i++) {  
+                    new_path_p0[i] = queue_pop(queue[tid]);
+                    //MPI_Send(new_path_p0[i], sizeof(new_path_p0[i]), MPI_PATH, i, MYTAG, WORLD);
+                }
+            }
+            initial_path = new_path_p0[rank];
+            //set_bound(initial_path, InitialLowerBound(input));
+        }
+
+    //}
+    //else {
+        /* MPI REC */
+    //    MPI_Irecv(initial_path, sizeof(initial_path), MPI_PATH, 0, MYTAG, WORLD, &request);
+    //}
+
+
+    //MPI_BARRIER(WORLD);
+        
+    /* density = edges / (2 * nodes) */
+
+    
+
 
     /* Creates N parallel threads. All threads execute the subsequent block.
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
