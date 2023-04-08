@@ -43,7 +43,10 @@ Solution *tsp_mpi(Inputs *input) {
     Solution *sol;
     priority_queue_t *queue[MAX_N_THREADS];
 
-    //print_minmaxcity(input, n_cities);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Get_processor_name(processor_name, &namelen);
         
     /* density = edges / (2 * nodes) */
     int twice_density = get_n_edges(input) / get_n_cities(input);
@@ -64,12 +67,6 @@ Solution *tsp_mpi(Inputs *input) {
     }
 
     set_bound(initial_path, InitialLowerBound(input));
-
-    int numprocs, rank;
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     /* Creates N parallel threads. All threads execute the subsequent block.
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
