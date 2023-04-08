@@ -40,13 +40,12 @@
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     if (input == NULL) return NULL;
     double BestTourCost = get_max_value(input);
-    int numprocs, rank, namelen, iam, nt;
+    int numprocs, rank;
     int twice_density = get_n_edges(input) / get_n_cities(input);
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Get_processor_name(processor_name, &namelen);
 
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
@@ -73,9 +72,16 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     //if (rank == 0) {
         /* Process elements until it gets enough elements to distribute for the remaining processes */        
         Path *current_path_p0;
-        int flag_p0 = 0, count_p0 = 0, dealer_p0 = 0;
+        int flag_p0 = 0, dealer_p0 = 0;
         priority_queue_t *queue_p0;
         Path *initial_path_p0, *new_path_p0[MAX_N_PROCS];
+
+        initial_path_p0 = create_path(n_cities);
+        if (initial_path_p0 == NULL) {
+            /* All needed frees and exits in error. */
+            free_inputs(input);
+            error();
+        }
 
 
         /* Creates a queue for each thread. */
@@ -113,7 +119,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
 
 
         /* Checks if all the processing of the graph was previously done. */
-        if (flag == 1 || (int) queue_p0->size == 0) {
+        if (flag_p0 == 1 || (int) queue_p0->size == 0) {
             /* Guarantees that reading and writing of one memory location is atomic. */
             exit_global += 1;
             MPI_Finalize();
@@ -135,14 +141,17 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             /* Check if the number of elements to distribute allows to distribute 
             1 or 2 elements per queue thread. Then pop that elements. */
             if ((int) queue_p0->size > numprocs) {
-                for (int i = 0 ; i < numprocs(); i++) {  
-                    new_path_p0[i] = queue_pop(queue[tid]);
+                for (int i = 0 ; i < numprocs; i++) {  
+                    new_path_p0[i] = queue_pop(queue_p0);
                     //MPI_Send(new_path_p0[i], sizeof(new_path_p0[i]), MPI_PATH, i, MYTAG, WORLD);
                 }
             }
             initial_path = new_path_p0[rank];
+            
             //set_bound(initial_path, InitialLowerBound(input));
         }
+
+        free_path(initial_path_p0);
 
     //}
     //else {
@@ -181,7 +190,14 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         #pragma omp master
         {
             queue_push(queue[tid], initial_path);
-        
+
+            if (rank == 0) {
+                while ((int) queue_p0->size != 0) {
+                    queue_push(queue[0], (queue_pop(queue_p0)));
+                }
+                
+            }
+
             /* Relevant computation to secure that further ahead we
             can evenly distribute elements by the queue of each thread. */
             if (((int) (twice_density * 0.8)) < 1) {
@@ -351,6 +367,10 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         queue_delete(queue[tid]);
         free_safe(queue[tid]);
     }
+
+    /* Frees auxiliar structures. */
+    queue_delete(queue_p0);
+    free_safe(queue_p0);
     MPI_Finalize();
 
     /* Check if a valid solution was found. */
