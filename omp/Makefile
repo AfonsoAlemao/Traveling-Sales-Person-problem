@@ -1,5 +1,5 @@
 TARGET = tsp-omp
-CC = mpicc
+CC = gcc
 CFLAGS = -Wall -fopenmp -O3
 
 default: $(TARGET)
