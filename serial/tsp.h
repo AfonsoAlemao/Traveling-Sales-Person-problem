@@ -17,6 +17,7 @@
 #define _TSP_H
 
 #include "auxiliar.h"
+#include "queue.h"
 
 Solution *tsp(Inputs *input);
 

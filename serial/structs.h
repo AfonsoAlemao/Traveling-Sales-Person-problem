@@ -22,6 +22,8 @@ typedef struct _inputs Inputs;
 typedef struct _solution Solution;
 typedef struct _path Path;
 
+#include "auxiliar.h"
+
 /* Initializers */
 Inputs *create_inputs(int);
 Solution *create_solution(int);

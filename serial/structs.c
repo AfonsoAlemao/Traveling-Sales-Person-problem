@@ -18,7 +18,6 @@
 #include <string.h>
 
 #include "structs.h"
-#include "auxiliar.h"
 
 struct _solution {
     int *BestTour;

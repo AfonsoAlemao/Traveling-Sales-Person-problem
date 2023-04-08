@@ -17,7 +17,6 @@
 #include <string.h>
 
 #include "tsp.h"
-#include "queue.h"
 
 /**********************************************************************************
 * tsp()
@@ -83,14 +82,14 @@ Solution *tsp(Inputs *input) {
 
     queue_push(queue, initial_path);
 
-    while (queue->size != 0) {
+    while ((int) queue->size != 0) {
         current_path = queue_pop(queue);
 
         /* All remaining nodes worse than best */
         if (get_bound(current_path) >= BestTourCost) {
             /* All needed frees */
             free_safe(isInTour);
-            while (queue->size != 0) {
+            while ((int) queue->size != 0) {
                 free_path(queue_pop(queue));
             }
             queue_delete(queue);
@@ -150,7 +149,7 @@ Solution *tsp(Inputs *input) {
                 if (new_path == NULL) {
                     /* All needed frees and exits in error */
                     free_safe(isInTour);
-                    while (queue->size != 0) {
+                    while ((int) queue->size != 0) {
                         free_path(queue_pop(queue));
                     }
                     queue_delete(queue);
