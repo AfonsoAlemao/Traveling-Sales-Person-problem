@@ -38,14 +38,14 @@
 **********************************************************************************/
 
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
     if (input == NULL) return NULL;
     double BestTourCost = get_max_value(input);
     int numprocs, rank;
     int twice_density = get_n_edges(input) / get_n_cities(input);
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
@@ -122,19 +122,6 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         if (flag_p0 == 1 || (int) queue_p0->size == 0) {
             /* Guarantees that reading and writing of one memory location is atomic. */
             exit_global += 1;
-            MPI_Finalize();
-
-            while ((int) queue_p0->size != 0) {
-                free_path(queue_pop(queue_p0));
-            }
-
-            /* Check if a valid solution was found. */
-            if (valid_BestTour(sol, n_cities)) {
-                return sol;
-            }
-            free_solution(sol);
-            return NULL;
-
         }
         else {
             /* Check which thread have the elements to distribute. */
@@ -160,7 +147,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     //}
 
 
-    //MPI_BARRIER(WORLD);
+    MPI_BARRIER(MPI_COMM_WORLD);
         
     /* density = edges / (2 * nodes) */
 
@@ -171,6 +158,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
     /* BestTourCost is a shared variable that exists in a single location 
     and all threads can read and write it. */
+    if (exit_global) {
     #pragma omp parallel shared(BestTourCost, dealer)
     {
         /* Each thread gets its thread id. */
@@ -195,7 +183,6 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
                 while ((int) queue_p0->size != 0) {
                     queue_push(queue[0], (queue_pop(queue_p0)));
                 }
-                
             }
 
             /* Relevant computation to secure that further ahead we
@@ -366,6 +353,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         /* Frees auxiliar structures. */
         queue_delete(queue[tid]);
         free_safe(queue[tid]);
+    }
     }
 
     /* Frees auxiliar structures. */
