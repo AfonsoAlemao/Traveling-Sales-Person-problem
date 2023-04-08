@@ -17,7 +17,7 @@
 #define _AUXILIAR_H
 
 #include "structs.h"
-#include <mpi.h>
+// #include <mpi.h>
 
 
 typedef enum { false, true } bool;

@@ -38,13 +38,14 @@
 **********************************************************************************/
 
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
+    int numprocs = 1, rank = 0;
+
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if (input == NULL) return NULL;
     double BestTourCost = get_max_value(input);
-    int numprocs, rank;
     int twice_density = get_n_edges(input) / get_n_cities(input);
 
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
@@ -103,6 +104,8 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         else {
             dealer_p0 = (int) (numprocs * twice_density * 0.8);
         }
+
+        //printf("dealer_p0=%d\n",dealer_p0);
         
 
         /* Process (Multiple: Pop + Work) the queue that has received first element until:
@@ -117,6 +120,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             free_path(current_path_p0);  
         }
 
+        //printf("queue_p0->size=%ld\n", queue_p0->size);
 
         /* Checks if all the processing of the graph was previously done. */
         if (flag_p0 == 1 || (int) queue_p0->size == 0) {
@@ -127,10 +131,9 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             /* Check which thread have the elements to distribute. */
             /* Check if the number of elements to distribute allows to distribute 
             1 or 2 elements per queue thread. Then pop that elements. */
-            if ((int) queue_p0->size > numprocs) {
+            if ((int) queue_p0->size >= numprocs) {
                 for (int i = 0 ; i < numprocs; i++) {  
                     new_path_p0[i] = queue_pop(queue_p0);
-                    //MPI_Send(new_path_p0[i], sizeof(new_path_p0[i]), MPI_PATH, i, MYTAG, WORLD);
                 }
             }
             initial_path = new_path_p0[rank];
@@ -138,8 +141,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             //set_bound(initial_path, InitialLowerBound(input));
         }
 
-        free_path(initial_path_p0);
-
+        print_path(initial_path, n_cities);
     //}
     //else {
         /* MPI REC */
@@ -147,7 +149,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     //}
 
 
-    MPI_BARRIER(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
         
     /* density = edges / (2 * nodes) */
 
@@ -158,7 +160,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
     /* BestTourCost is a shared variable that exists in a single location 
     and all threads can read and write it. */
-    if (exit_global) {
+    if (exit_global == 0) {
     #pragma omp parallel shared(BestTourCost, dealer)
     {
         /* Each thread gets its thread id. */
@@ -180,6 +182,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             queue_push(queue[tid], initial_path);
 
             if (rank == 0) {
+                //printf("%d\n", (int) queue_p0->size);
                 while ((int) queue_p0->size != 0) {
                     queue_push(queue[0], (queue_pop(queue_p0)));
                 }
