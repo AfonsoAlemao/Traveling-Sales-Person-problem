@@ -22,7 +22,7 @@
 #include "queue.h"
 
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]);
-void work(priority_queue_t *, int , double *, Inputs* , Solution *, Path*, int *);
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int rank, int numprocs);
 
 #endif
 

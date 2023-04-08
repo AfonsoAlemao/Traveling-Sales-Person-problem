@@ -44,6 +44,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+
     if (input == NULL) return NULL;
     double BestTourCost = get_max_value(input);
     int twice_density = get_n_edges(input) / get_n_cities(input);
@@ -116,7 +117,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         calculation that uses the density of the graph in question.  */
         while (((int) queue_p0->size != 0) && (flag_p0 != 1) && ((int) queue_p0->size < dealer_p0)) {
             current_path_p0 = queue_pop(queue_p0);
-            work(queue_p0, n_cities, &BestTourCost, input, sol, current_path_p0, &flag_p0);
+            work(queue_p0, n_cities, &BestTourCost, input, sol, current_path_p0, &flag_p0, rank, numprocs);
             free_path(current_path_p0);  
         }
 
@@ -206,7 +207,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         calculation that uses the density of the graph in question.  */
         while (((int) queue[tid]->size != 0) && (flag != 1) && ((int) queue[tid]->size < dealer)) {
             current_path = queue_pop(queue[tid]);
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, rank, numprocs);
             free_path(current_path);  
         }
 
@@ -260,8 +261,10 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         /* Process the queue of each thread until the program ends: 
         flag = 1 (only irrelevant elements in queues) or queue size = 0 for all threads. */
         while (((int) queue[tid]->size != 0) && (flag != 1)) {
+            //MPI_Irecv(BestTourCost, 1, MPI_DOUBLE, 1, MYTAG, WORLD, &request);
+
             current_path = queue_pop(queue[tid]);
-            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag);
+            work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, rank, numprocs);
             free_path(current_path);
 
             /* Load balancing: when a thread finish the execution of its tasks it asks for elements 
@@ -362,14 +365,65 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     /* Frees auxiliar structures. */
     queue_delete(queue_p0);
     free_safe(queue_p0);
+
+
+    double BestTourCostAux = 0, BestTourCostMin = -1;
+    int procBestCost = 0;
+    MPI_Status status;
+
+    if (rank == 0) {
+        BestTourCostMin = BestTourCost;
+    }
+
+
+    // printf("cheguei\n");
+
+    for (int jj = 1; jj < numprocs; jj++) {
+        if (rank == jj) {
+            MPI_Send(&BestTourCost, 1, MPI_DOUBLE, 0, rank, MPI_COMM_WORLD);
+            // printf("Sou o %d e vou mandar o meu resultado para o 0\n", jj);
+        }
+        if (rank == 0) {
+            MPI_Recv(&BestTourCostAux, 1, MPI_DOUBLE, jj, jj, MPI_COMM_WORLD, &status);
+            // printf("Sou o 0 e vou receber do %d\n", jj);
+
+            if (BestTourCostAux < BestTourCostMin || (BestTourCostMin == -1 && BestTourCostAux != -1)) {
+                BestTourCostMin = BestTourCostAux;
+                procBestCost = jj;
+            }
+        }
+
+    }
+
+    // if (rank != 0) {
+    //     MPI_Send(&BestTourCost, 1, MPI_DOUBLE, 0, rank, MPI_COMM_WORLD);
+    // }
+    // else {
+    //     BestTourCostMin = BestTourCost;
+    //     for (int jj = 1; jj < numprocs; jj++) {
+    //         MPI_Recv(&BestTourCostAux, 1, MPI_DOUBLE, 1, jj, MPI_COMM_WORLD, &status);
+    //         if (BestTourCostAux < BestTourCostMin || (BestTourCostMin == -1 && BestTourCostAux != -1)) {
+    //             BestTourCostMin = BestTourCostAux;
+    //             procBestCost = jj;
+    //         }
+    //     }
+    // }
+
+    MPI_Bcast (&procBestCost, 1, MPI_INT, 0, MPI_COMM_WORLD); 
+
     MPI_Finalize();
 
-    /* Check if a valid solution was found. */
-    if (valid_BestTour(sol, n_cities)) {
-        return sol;
+    if (rank == procBestCost) {
+        /* Check if a valid solution was found. */
+        if (valid_BestTour(sol, n_cities)) {
+            return sol;
+        }
+        free_solution(sol);
+        return NULL;
     }
-    free_solution(sol);
-    return NULL;
+    else {
+        exit(0);
+    }
 }
 
 
@@ -393,7 +447,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
 *
 **********************************************************************************/
 
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int rank, int numprocs) {
     int i = 0, min_city = -1, max_city = -1;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
@@ -417,6 +471,11 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                 *BestTourCost = get_cost(current_path) + aux_distance;
                 set_BestTourCost(sol, *BestTourCost);
             }
+            // for (int jj = 0; jj < numprocs; jj++) {
+            //     if (jj != rank) {
+            //         MPI_Isend(BestTourCost, 1, MPI_DOUBLE, jj, MYTAG, MPI_COMM_WORLD);
+            //     }
+            // }
         }
     }
     
