@@ -141,7 +141,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             //set_bound(initial_path, InitialLowerBound(input));
         }
 
-        print_path(initial_path, n_cities);
+        //print_path(initial_path, n_cities);
     //}
     //else {
         /* MPI REC */
