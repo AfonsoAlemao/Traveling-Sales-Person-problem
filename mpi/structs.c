@@ -36,12 +36,12 @@ struct _inputs {
 };
 
 struct _path {
-    int *Tour;
     double cost;
     double bound;
 	int length;
 	int node;
     long isInTour;
+    int Tour[];
 };
 
 
@@ -433,15 +433,15 @@ Path *create_path(int n_cities) {
     Path *new_path;
 	new_path = NULL;
 
-    new_path = (Path *) malloc(sizeof(Path));
+    new_path = (Path *) malloc(sizeof(Path) + (n_cities + 1) * sizeof(int));
     if (new_path == NULL) return NULL;
 
-    new_path->Tour = (int *) malloc((n_cities + 1) * sizeof(int));
-    if (new_path->Tour == NULL) {
-        /* All needed frees and exits in error */
-        free_path(new_path);
-        return NULL;
-    }
+    // new_path->Tour = (int *) malloc((n_cities + 1) * sizeof(int));
+    // if (new_path->Tour == NULL) {
+    //     /* All needed frees and exits in error */
+    //     free_path(new_path);
+    //     return NULL;
+    // }
 
     new_path->Tour[0] = 0;
     
@@ -565,7 +565,7 @@ void set_isInTour(Path *got_path, int index, long isInTour) {
 
 void free_path(Path *got_path) {
     if (got_path != NULL) {
-        free_safe(got_path->Tour);
+        // free_safe(got_path->Tour);
         free_safe(got_path);
     }
     return;
