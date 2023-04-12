@@ -1,6 +1,6 @@
 TARGET = tsp-mpi
 CC = mpicc
-CFLAGS = -Wall -fopenmp -O3
+CFLAGS = -Wall -Wextra -fopenmp -O3
 
 default: $(TARGET)
 all: default
