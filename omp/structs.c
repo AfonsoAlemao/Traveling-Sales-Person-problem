@@ -31,6 +31,8 @@ struct _inputs {
 	int n_edges;
     double *min1;
     double *min2;
+    int *max_city;
+    int *min_city;
 };
 
 struct _path {
@@ -39,6 +41,7 @@ struct _path {
     double bound;
 	int length;
 	int node;
+    long isInTour;
 };
 
 
@@ -87,9 +90,25 @@ Inputs *create_inputs(int n_cities) {
         error();
     }
 
+    new_input->max_city = (int *) malloc((n_cities) * sizeof(int));
+    if (new_input->max_city == NULL)  {
+        /* All needed frees and exits in error */
+        free_inputs(new_input);
+        error();
+    }
+
+    new_input->min_city = (int *) malloc((n_cities) * sizeof(int));
+    if (new_input->min_city== NULL)  {
+        /* All needed frees and exits in error */
+        free_inputs(new_input);
+        error();
+    }
+
     for (int i = 0; i < n_cities; i++) {
         new_input->min1[i] = -1;
         new_input->min2[i] = -1;
+        new_input->min_city[i] = -1;
+        new_input->max_city[i] = -1;
 		for (j = 0; j < n_cities; j++) {
             new_input->adj_matrix[i][j] = -1;
         }
@@ -110,6 +129,35 @@ double get_ajd_matrix_item(int row, int col, Inputs *got_input) {
     }
 
     return got_input->adj_matrix[row][col];
+}
+
+int get_mincity(int index, Inputs *got_input) {
+    if (got_input == NULL) return -1;
+    if (index < 0 || index >= got_input->n_cities) {
+        free_inputs(got_input);
+        error();
+    }
+
+    return got_input->min_city[index];
+}
+
+int get_maxcity(int index, Inputs *got_input) {
+    if (got_input == NULL) return -1;
+    if (index < 0 || index >= got_input->n_cities) {
+        free_inputs(got_input);
+        error();
+    }
+
+    return got_input->max_city[index];
+}
+
+void print_minmaxcity(Inputs *got_input, int n_cities) {
+    if (got_input == NULL) return;
+    for (int i = 0; i < n_cities; i++) {
+        printf("Node = %d,\t min_city = %d, max_city = %d\n", i, got_input->max_city[i], got_input->min_city[i]);
+    }
+    printf("\n");
+    return;
 }
 
 int get_n_cities(Inputs *got_input) {
@@ -183,6 +231,48 @@ void set_ajd_matrix_item(int row, int col, Inputs *got_input, double cost) {
         }
     }
 
+    if (got_input->max_city[row] == -1) {
+        got_input->max_city[row] = col;
+        got_input->min_city[row] = col;
+    }
+    else if (col > got_input->max_city[row]) {
+        got_input->max_city[row] = col;
+    }
+    else if (col < got_input->min_city[row]) {
+        got_input->min_city[row] = col;
+    }
+
+
+    if (got_input->max_city[col] == -1) {
+        got_input->max_city[col] = row;
+        got_input->min_city[col] = row;
+    }
+    else if (row > got_input->max_city[col]) {
+        got_input->max_city[col] = row;
+    }
+    else if (row < got_input->min_city[col]) {
+        got_input->min_city[col] = row;
+    }
+    return;
+}
+
+void set_mincity(int index, int city, Inputs *got_input) {
+    if (got_input == NULL) return;
+    if (index < 0 || index >= got_input->n_cities) {
+        free_inputs(got_input);
+        error();
+    }
+    got_input->min_city[index] = city;
+    return;
+}
+
+void set_maxcity(int index, int city, Inputs *got_input) {
+    if (got_input == NULL) return;
+    if (index < 0 || index >= got_input->n_cities) {
+        free_inputs(got_input);
+        error();
+    }
+    got_input->max_city[index] = city;
     return;
 }
 
@@ -363,6 +453,7 @@ Path *create_path(int n_cities) {
     new_path->bound = 0;
     new_path->length = 1;
     new_path->node = 0;
+    new_path->isInTour = 1;
     return new_path;
 }
 
@@ -399,6 +490,11 @@ int get_length(Path *got_path) {
 int get_node(Path *got_path) {
     if (got_path == NULL) return -1;
     return got_path->node;
+}
+
+long get_isInTour(Path *got_path) {
+    if (got_path == NULL) return -1;
+    return got_path->isInTour;
 }
 
 void print_path(Path *got_path, int n_cities) {
@@ -453,6 +549,13 @@ void set_length(Path *got_path, int length) {
 void set_node(Path *got_path, int node) {
     if (got_path == NULL) return;
     got_path->node = node;
+    return;
+}
+
+void set_isInTour(Path *got_path, int index, long isInTour) {
+    if (got_path == NULL) return;
+    got_path->isInTour = isInTour | (1 << index);
+
     return;
 }
 

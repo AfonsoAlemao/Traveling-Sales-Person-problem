@@ -17,6 +17,8 @@
 #define _TSP_OMP_H
 
 #include <omp.h>
+#include <mpi.h>
+
 #include "auxiliar.h"
 #include "queue.h"
 

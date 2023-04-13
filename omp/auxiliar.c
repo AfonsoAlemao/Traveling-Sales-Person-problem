@@ -412,10 +412,11 @@ char compare (void *a, void *b) {
 	if (a == NULL || b == NULL) return -1;
 	Path *e1 = (Path *) a;
 	Path *e2 = (Path *) b;
-	if (get_bound(e1) < get_bound(e2)) {
+	double b1 = get_bound(e1), b2 = get_bound(e2);
+	if (b1 < b2) {
 		return 0;
 	}
-	else if (get_bound(e1) == get_bound(e2)) {
+	else if (b1 == b2) {
 		if (get_node(e1) <= get_node(e2)) {
 			return 0;
 		}
@@ -426,28 +427,6 @@ char compare (void *a, void *b) {
 	return 1;
 }
 
-/**********************************************************************************
- * InitializeIsInTour()
- *
- * Arguments: isInTour - tour to be initialized 
- *			  n_cities - number of cities of the graph
- * 
- * Return: (void) 
- *
- * Side effects: (none)
- *
- * Description: Initializes isInTour that marks the elements in the current tour
- *
- ********************************************************************************/
-
-void InitializeIsInTour(int *isInTour, int n_cities) {
-	if (isInTour == NULL) return;
-
-	for (int i = 0; i < n_cities; i++) {
-		isInTour[i] = 1;
-	}
-	return;
-}
 
 /**********************************************************************************
  * free_safe()

@@ -18,6 +18,7 @@
 
 #include "tsp-omp.h"
 
+
 #define MAX_N_THREADS 64
 
 /**********************************************************************************
@@ -41,6 +42,8 @@ Solution *tsp_omp(Inputs *input) {
     Path *initial_path, *new_path[MAX_N_THREADS * 2];
     Solution *sol;
     priority_queue_t *queue[MAX_N_THREADS];
+
+    //print_minmaxcity(input, n_cities);
         
     /* density = edges / (2 * nodes) */
     int twice_density = get_n_edges(input) / get_n_cities(input);
@@ -61,6 +64,12 @@ Solution *tsp_omp(Inputs *input) {
     }
 
     set_bound(initial_path, InitialLowerBound(input));
+
+    int numprocs, rank;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     /* Creates N parallel threads. All threads execute the subsequent block.
     All threads wait for each other at the end of this executing block: implicit barrier synchronization */
@@ -255,6 +264,7 @@ Solution *tsp_omp(Inputs *input) {
         queue_delete(queue[tid]);
         free_safe(queue[tid]);
     }
+    MPI_Finalize();
 
     /* Check if a valid solution was found. */
     if (valid_BestTour(sol, n_cities)) {
@@ -286,20 +296,13 @@ Solution *tsp_omp(Inputs *input) {
 **********************************************************************************/
 
 void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag) {
-    int i = 0, *isInTour, *tour;
+    int i = 0, min_city = -1, max_city = -1;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
-    
+    //printf("293: Me: %d\n", get_node(current_path));
     /* Checks if all remaining nodes in queue are worse than BestTourCost. */
     if (get_bound(current_path) >= *BestTourCost) {
         *flag = 1;
-    }
-
-    /* isInTour will mark the elements in the current tour. */
-    isInTour = (int *) malloc(n_cities * sizeof(int));
-    if (isInTour == NULL) {
-        *flag = 2;
-        error();
     }
 
     /* Tour complete, check if it is best. */
@@ -320,25 +323,17 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
     }
     
     else if (*flag == 0) {
-        tour = get_Tour(current_path);
-
-        /* isInTour mark the elements in the current tour. */
-        InitializeIsInTour(isInTour, n_cities);
-
-        for (i = 0; i < n_cities; i++) {
-            if (tour[i] != -1) {
-                isInTour[tour[i]] = 0;
-            }
-        }
-
-        for (i = 0; i < n_cities; i++) {
+        min_city = get_mincity(get_node(current_path), input);
+        max_city = get_maxcity(get_node(current_path), input) + 1;
+        
+        for (i = min_city; i < max_city; i++) {
             /* Connection does not exist. */
             if (distance(get_node(current_path), i, input) < 0) {
                 continue;
             }
 
-            /* Check if city in already in the current tour, except for the start city (0). */
-            if (isInTour[i] == 0 && !(i == 0 && get_length(current_path) == n_cities)) {
+            /* Check if node is already in tour */
+            if ((1 << i) & get_isInTour(current_path) && !(i == 0 && get_length(current_path) == n_cities)) {
                 continue;
             }
 
@@ -366,13 +361,12 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
             /* newNode ← i */ 
             set_node(new_path, i);
 
+            set_isInTour(new_path, i, get_isInTour(current_path));
+
             /* Insert it in queue. */
             queue_push(queue, new_path);
-            
         }  
     }
-
-    free_safe(isInTour);
 
     return;
 }
