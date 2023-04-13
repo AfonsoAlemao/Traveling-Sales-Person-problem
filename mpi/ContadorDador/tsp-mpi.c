@@ -15,9 +15,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
 #include "tsp-mpi.h"
-
 
 #define MAX_N_THREADS 64
 #define MAX_N_PROCS 8
@@ -29,7 +27,7 @@
 #define TAG_SOSFINAL 4545
 #define INFINTY_DOUBLE 1.7E+308
 
-
+/* Same struct as in structs.c that we use in order to create a MPI Datatype. */
 typedef struct _path {
     double cost;
     double bound;
@@ -40,57 +38,53 @@ typedef struct _path {
 }Path;
 
 /**********************************************************************************
-* tsp_omp()
+* tsp_mpi()
 *
 * Arguments:    input - pointer to the input
+*               argc, argv - input arguments
 *
 * Returns:      Solutions pointer
 *
 * Side-Effects: Allocates memory for solution
 *
-* Description:  OpenMP implementation of the algorithm that gets
+* Description:  MPI + OpenMP implementation of the algorithm that gets
 *   the shortest path through all cities
 *
 **********************************************************************************/
-
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
-    int numprocs = 1, rank = 0;
-    int sender = 0, receiver = 0;
-    int solved = 0;
-    int workStatus = 1;
-    bool received9 = false, receivedF = false;
+    int numprocs = 1, rank = 0, sender = 0, receiver = 0;
+    int solved = 0, finish = 0, end = 1;
     int counter_send = 0, flag_recF = 0, flag_rec9 = 0;
-    int finish = 0;
-    double BestTourCostAux = 0;
-    bool valid = true;
-    int end = 1;
+    int twice_density, flag_p0 = 0, dealer_p0 = 0;
+    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0;
+    int exit_global = 0, twice = 0, dealer = 0, flag_rec2 = 0;
+    bool received9 = false, receivedF = false, received2 = false;
+    bool updateCost = false, stopsending = false, valid = true;
+    double BestTourCostAux = 0, BestTourCost, BestTourCostAuxx;
+    Path *initial_path, *new_path[MAX_N_THREADS * 2], *path_to_send;
+    Path *path_aux, *current_path_p0, *initial_path_p0, *new_path_p0[MAX_N_PROCS];
+    Solution *sol;
+    priority_queue_t *queue[MAX_N_THREADS], *queue_p0;  
+
+    MPI_Request reqsend, req2, reqF, req9,reqsend2;
+    MPI_Status stat2, statF, stat9;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    MPI_Request reqsend, req2, reqF, req9,reqsend2;
-    MPI_Status stat2, statF, stat9;
-    
     if (input == NULL) return NULL;
-    double BestTourCost = get_max_value(input), BestTourCostAuxx[2];
-    int twice_density = get_n_edges(input) / get_n_cities(input);
-    int auxProcBestCost = 0;
-    bool received2 = false;
-    bool updateCost = false, stopsending = false;
-    Path *initial_path, *new_path[MAX_N_THREADS * 2], *path_to_send, *path_aux;
-    Solution *sol;
-    priority_queue_t *queue[MAX_N_THREADS];
-    int n_cities = get_n_cities(input), whistle = -1, global_tid = 0, exit_global = 0, twice = 0, dealer = 0, flag_rec2 = 0;
-    int procBestCost = rank;
 
-    // mpi structure name
+    BestTourCost = get_max_value(input);
+    twice_density = get_n_edges(input) / get_n_cities(input);
+
+    /* MPI structure name. */
     MPI_Datatype path_mpi;
 
-    // number of structure members
+    /* Number of structure members. */
     const int nitems = 6;
- 
-    // array of structure member sizes
+
+    /* Array of structure member sizes. */
     int blocklengths[6];
     blocklengths[0] = 1;
     blocklengths[1] = 1;
@@ -99,10 +93,10 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     blocklengths[4] = 1;
     blocklengths[5] = n_cities + 1;
 
-    // structure member types
-    MPI_Datatype types[6] = { MPI_DOUBLE, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_LONG, MPI_INT};
+    /* Structure member types. */
+    MPI_Datatype types[6] = {MPI_DOUBLE, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_LONG, MPI_INT};
 
-    // offset of structure members
+    /* Offset of structure members. */
     MPI_Aint offsets[6];
     offsets[0] = offsetof(Path,cost);
     offsets[1] = offsetof(Path,bound);
@@ -111,14 +105,11 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     offsets[4] = offsetof(Path,isInTour);
     offsets[5] = offsetof(Path,Tour);
 
-    // create mpi struct
+    /* Create MPI struct. */
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &path_mpi);
     MPI_Type_commit(&path_mpi);
 
-    for (int i = 1; i < numprocs; i++) {
-        workStatus = workStatus + (1 << i);
-    }
-
+    /* Allocate necessary structures to run the algorithm. */
     initial_path = create_path(n_cities);
     if (initial_path == NULL) {
         /* All needed frees and exits in error. */
@@ -134,11 +125,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         error();
     }
 
-    Path *current_path_p0;
-    int flag_p0 = 0, dealer_p0 = 0;
-    priority_queue_t *queue_p0;
-    Path *initial_path_p0, *new_path_p0[MAX_N_PROCS];
-
+    /* Auxiliar structures for the initial process work distribution. */
     initial_path_p0 = create_path(n_cities);
     if (initial_path_p0 == NULL) {
         /* All needed frees and exits in error. */
@@ -146,20 +133,18 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         error();
     }
 
-
-    /* Creates a queue for each thread. */
+    /* Creates an auxiliar queue for each process. */
     queue_p0 = queue_create(compare);
     if (queue_p0 == NULL) {
-        /* Exits in error */
+        /* Exits in error. */
         error();
     }
 
     set_bound(initial_path_p0, InitialLowerBound(input));
-
     queue_push(queue_p0, initial_path_p0);
 
     /* Relevant computation to secure that further ahead we
-    can evenly distribute elements by the queue of each thread. */
+    can evenly distribute elements by the queue of each process. */
     if (((int) (twice_density * 0.8)) < 1) {
         dealer_p0 = numprocs;
     }
@@ -167,15 +152,15 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         dealer_p0 = (int) (numprocs * twice_density * 0.8);
     }    
 
-    /* Process (Multiple: Pop + Work) the queue that has received first element until:
-    - the program ends: flag = 1 (only irrelevant elements in queue) or queue[tid]->size = 0 (no more elements)
+    /* Processing (Multiple: Pop + Work) the queues until:
+    - the program ends: flag = 1 (only irrelevant elements in queue) or queue->size = 0 (no more elements)
     or
-    - the queue size is large enough to evenly distribute elements (1 or 2) among the queues of the 
-    other threads. This queue size and the number of distributed elements were optimized through a 
-    calculation that uses the density of the graph in question.  */
+    - the queue size is large enough to evenly distribute elements (1) among the queues of the 
+    other processes. This queue size and the number of distributed elements were optimized through a 
+    calculation that uses the density of the graph in question. */
     while (((int) queue_p0->size != 0) && (flag_p0 != 1) && ((int) queue_p0->size < dealer_p0)) {
         current_path_p0 = queue_pop(queue_p0);
-        work(queue_p0, n_cities, &BestTourCost, input, sol, current_path_p0, &flag_p0, rank, numprocs, BestTourCostAuxx, false, NULL, &procBestCost,&updateCost, auxProcBestCost, receiver, MYTAG);
+        work(queue_p0, n_cities, &BestTourCost, input, sol, current_path_p0, &flag_p0, numprocs, &BestTourCostAuxx, false, NULL, &updateCost, receiver, MYTAG);
         free_path(current_path_p0);  
     }
 
@@ -191,9 +176,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         }
     }
     else {
-        /* Check which thread have the elements to distribute. */
-        /* Check if the number of elements to distribute allows to distribute 
-        1 or 2 elements per queue thread. Then pop that elements. */
+        /* Distribute elements by processes. */
         if ((int) queue_p0->size >= numprocs) {
             for (int i = 0 ; i < numprocs; i++) {  
                 new_path_p0[i] = queue_pop(queue_p0);
@@ -201,12 +184,8 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         }
         initial_path = new_path_p0[rank];
     }
-
-    MPI_Barrier(MPI_COMM_WORLD);
         
-    /* density = edges / (2 * nodes) */
-
-    /* Ring structure */
+    /* Ring structure. */
     if (rank != 0) {
         sender = rank - 1; 
     }
@@ -222,10 +201,9 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
 
     if (exit_global == 0) {
          /* Creates N parallel threads. All threads execute the subsequent block.
-        All threads wait for each other at the end of this executing block: implicit barrier synchronization */
+        All threads wait for each other at the end of this executing block: implicit barrier synchronization. */
         /* BestTourCost is a shared variable that exists in a single location 
         and all threads can read and write it. */
-
         #pragma omp parallel shared(BestTourCost, dealer) private(updateCost)
         {
             /* Each thread gets its thread id. */
@@ -237,7 +215,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             /* Creates a queue for each thread. */
             queue[tid] = queue_create(compare);
             if (queue[tid] == NULL) {
-                /* Exits in error */
+                /* Exits in error. */
                 error();
             }
     
@@ -262,36 +240,36 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
                 }
             }
 
+            /* Initialize array in order to share the updates of BestTourCost between processes. */
+            BestTourCostAuxx = BestTourCost;
+
             /* Process (Multiple: Pop + Work) the queue that has received first element until:
             - the program ends: flag = 1 (only irrelevant elements in queue) or queue[tid]->size = 0 (no more elements)
             or
             - the queue size is large enough to evenly distribute elements (1 or 2) among the queues of the 
             other threads. This queue size and the number of distributed elements were optimized through a 
             calculation that uses the density of the graph in question. */
-
-            BestTourCostAuxx[0] = BestTourCost;
-            BestTourCostAuxx[1] = rank;
-            
             while (((int) queue[tid]->size != 0) && (flag != 1) && ((int) queue[tid]->size < dealer)) {
-                if (numprocs > 1)
-                {
+                /* Communication between 2 or more processes. */
+                if (numprocs > 1) {
+                    /* Enable listening updates of the BestTourCost from the sender. */
                     if (!received2) {
-                        MPI_Irecv(BestTourCostAuxx, 2, MPI_DOUBLE, sender, MYTAG2, MPI_COMM_WORLD, &req2); 
+                        MPI_Irecv(&BestTourCostAuxx, 1, MPI_DOUBLE, sender, MYTAG2, MPI_COMM_WORLD, &req2); 
                         received2 = true;
                     }                
+                    /* Check if a BestTourCost message has been received. */
                     MPI_Test(&req2, &flag_rec2, &stat2);
                     if (flag_rec2) {
-                        if ((BestTourCostAuxx[0] < BestTourCost) || ((BestTourCostAuxx[0] == BestTourCost) && (procBestCost > (int) BestTourCostAuxx[1]))) {
-                            MPI_Isend(BestTourCostAuxx, 2, MPI_DOUBLE, receiver, MYTAG2, MPI_COMM_WORLD, &reqsend2);
+                        /* If the received BestTourCost is better than the current one, set its update. */
+                        if (BestTourCostAuxx < BestTourCost) {
+                            MPI_Isend(&BestTourCostAuxx, 1, MPI_DOUBLE, receiver, MYTAG2, MPI_COMM_WORLD, &reqsend2);
                             updateCost = true;
-                            auxProcBestCost = (int) BestTourCostAuxx[1];
-                            
                         }
                         received2 = false;
                     }
                 }
                 current_path = queue_pop(queue[tid]);
-                work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, rank, numprocs, BestTourCostAuxx, true, &reqsend2, &procBestCost, &updateCost, auxProcBestCost, receiver, MYTAG2);
+                work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, numprocs, &BestTourCostAuxx, true, &reqsend2, &updateCost, receiver, MYTAG2);
                 free_path(current_path);  
             }
 
@@ -345,22 +323,29 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
             while (((int) queue[tid]->size != 0) && (flag != 1)) {
                 #pragma omp master
                 {
+                    /* Communication between 2 or more processes. */
                     if (numprocs > 1) {
                         counter_send++;
+
+                        /* Enable listening updates of the BestTourCost from the sender. */
                         if (!received2) {
-                            MPI_Irecv(BestTourCostAuxx, 2, MPI_DOUBLE, sender, MYTAG2, MPI_COMM_WORLD, &req2);
+                            MPI_Irecv(&BestTourCostAuxx, 1, MPI_DOUBLE, sender, MYTAG2, MPI_COMM_WORLD, &req2);
                             received2 = true;
-                        }                        
+                        }               
+                        /* Check if a BestTourCost message has been received. */         
                         MPI_Test(&req2, &flag_rec2, &stat2);
                         if (flag_rec2) {
-                            if ((BestTourCostAuxx[0] < BestTourCost) || (BestTourCostAuxx[0] == BestTourCost && (procBestCost > (int) BestTourCostAuxx[1]))) {
-                                MPI_Isend(BestTourCostAuxx, 2, MPI_DOUBLE, receiver, MYTAG2, MPI_COMM_WORLD, &reqsend2);
+                            /* If the received BestTourCost is better than the current one, set its update. */
+                            if (BestTourCostAuxx < BestTourCost) {
+                                MPI_Isend(&BestTourCostAuxx, 1, MPI_DOUBLE, receiver, MYTAG2, MPI_COMM_WORLD, &reqsend2);
                                 updateCost = true;
-                                auxProcBestCost = (int) BestTourCostAuxx[1];
                             }
                             received2 = false;
                         }
 
+                        /* Periodically, if the process queue of the master thread has enough elements,
+                        send an element to its receiver. It also checks if its receiver has already finish,
+                        to avoid send an element to it. */
                         if (!stopsending) {
                             if (counter_send == 100000) {
                                 if (queue[tid]->size > 3) {
@@ -370,38 +355,42 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
                             }
                         }
 
+                        /* Enable the receiving of elements from the sender. */
                         if (!received9) {
                             path_aux = create_path(n_cities);
                             MPI_Irecv(path_aux, 1, path_mpi, sender, TAG_WORK_SOS, MPI_COMM_WORLD, &req9);
                             received9 = true;
                         }
-
+                        /* Check if an element has been received. */    
                         MPI_Test(&req9, &flag_rec9, &stat9);
                         if (flag_rec9) {
+                            /* Push the received element to the master thread queue. */
                             queue_push(queue[tid], path_aux);
                             received9 = false;
                         }
 
+                        /* Enable the receiving of the finished status from the receiver. */
                         if (!receivedF) {
                             MPI_Irecv(&finish, 1, MPI_INT, receiver, TAG_FINISH, MPI_COMM_WORLD, &reqF);
                             receivedF = true;
                         }
-
+                        /* Check if the receiver has finished. */
                         MPI_Test(&reqF, &flag_recF, &statF);
                         if (flag_recF) {
+                            /* In that case, the last element we send to the receiver might not have been delivered, 
+                            so we add it again to our queue. Furthermore we stop sending elements periodically 
+                            to the receiver. */
                             receivedF = false;
                             stopsending = true;
-                            
                             if (path_to_send != NULL) {
                                 queue_push(queue[tid], path_to_send);
                             }
-                            
                         }
                     }
                 }
 
                 current_path = queue_pop(queue[tid]);
-                work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, rank, numprocs, BestTourCostAuxx, true, &reqsend, &procBestCost, &updateCost, auxProcBestCost, receiver, MYTAG);
+                work(queue[tid], n_cities, &BestTourCost, input, sol, current_path, &flag, numprocs, &BestTourCostAuxx, true, &reqsend, &updateCost, receiver, MYTAG);
 
                 free_path(current_path);
 
@@ -428,7 +417,6 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
                     }
                     
                     if (tid == global_tid) {
-
                         /* A thread waits at the the beginning of a critical region until no
                         other thread is executing a critical region with the same name. */
                         #pragma omp critical 
@@ -500,23 +488,27 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
         }
     }
 
+    /* Send to the sender the information that this process has finished working. */
     MPI_Send(&end, 1, MPI_INT, sender, TAG_FINISH, MPI_COMM_WORLD);    
 
     /* Frees auxiliar structures. */
     queue_delete(queue_p0);
     free_safe(queue_p0);
 
-    procBestCost = 0;
-
+    /* In a later stage only the process with the lowest BestTourCost will print its result. 
+    So the process with no valid results will have BestTourCost = infinity to avoid being printed. */
     if (!valid_BestTour(sol, n_cities) || get_BestTourCost(sol) != BestTourCost) {
         BestTourCost = INFINTY_DOUBLE;
     }
-
     BestTourCostAux = BestTourCost; 
 
+    /* Syncronization to secure that all the processes have its result before broadcasting it. */
     MPI_Barrier(MPI_COMM_WORLD);
 
-    /* This section is to joint the results from the multiple processes */
+    /* This section is to join the results from the multiple processes. 
+    Each process broadcasts its BestTourCost. That way, when a process receives a
+    lower cost than its one (or an equal one from a process with lower rank), 
+    it will invalidate itself. */
     for (int iii = 0; iii < numprocs; iii++) {
         MPI_Bcast (&BestTourCostAux, 1, MPI_DOUBLE, iii, MPI_COMM_WORLD); 
         MPI_Barrier(MPI_COMM_WORLD);
@@ -565,7 +557,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
 *
 **********************************************************************************/
  
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int rank, int numprocs, double *BestTourCostAuxx, bool comm, MPI_Request *reqsend, int *procBestCost, bool *updateCost, int auxProcBestCost, int receiver, int myTAG) {
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int numprocs, double *BestTourCostAuxx, bool comm, MPI_Request *reqsend, bool *updateCost, int receiver, int myTAG) {
     int i = 0, min_city = -1, max_city = -1;
     double newBound = 0, aux_distance = 0;
     Path *new_path;
@@ -583,9 +575,9 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
         the beginning of that block until no other thread is executing that section. */
         #pragma omp critical
         {
-            if ((BestTourCostAuxx[0] < *BestTourCost && (*updateCost)) || ((BestTourCostAuxx[0] == *BestTourCost) && (*procBestCost > (int) BestTourCostAuxx[1]) && (*updateCost))){
-                *BestTourCost = BestTourCostAuxx[0];
-                *procBestCost = auxProcBestCost;
+            /* If the received BestTourCost from the sender is lower than the one from this process, update it. */
+            if (*BestTourCostAuxx < *BestTourCost && (*updateCost)){
+                *BestTourCost = *BestTourCostAuxx;
                 *updateCost = false;
             }
             if (get_length(current_path) == n_cities && *flag == 0){
@@ -593,12 +585,11 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                     set_BestTour(sol, get_Tour(current_path), n_cities);
                     set_BestTour_item(n_cities, sol, 0, n_cities);
                     *BestTourCost = get_cost(current_path) + aux_distance;
-                    BestTourCostAuxx[0] = *BestTourCost;
-                    BestTourCostAuxx[1] = (double) rank;
+                    *BestTourCostAuxx = *BestTourCost;
                     set_BestTourCost(sol, *BestTourCost);
-                    *procBestCost = rank;
+                    /* When the process updates its BestTourCost, send it to the receiver. */
                     if (comm && numprocs > 1) {
-                        MPI_Isend(BestTourCostAuxx, 2, MPI_DOUBLE, receiver, myTAG, MPI_COMM_WORLD, reqsend);
+                        MPI_Isend(BestTourCostAuxx, 1, MPI_DOUBLE, receiver, myTAG, MPI_COMM_WORLD, reqsend);
                     }
                 }
             }
@@ -615,7 +606,7 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
                 continue;
             }
 
-            /* Check if node is already in tour */
+            /* Check if node is already in tour. */
             if ((1 << i) & get_isInTour(current_path) && !(i == 0 && get_length(current_path) == n_cities)) {
                 continue;
             }
@@ -632,16 +623,16 @@ void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* i
             }
             
             /* Create new path element. */
-            /* newTour ← Tour ∪ {i} */
+            /* newTour ← Tour ∪ {i}. */
             set_Tour(new_path, get_Tour(current_path), n_cities);
             set_Tour_item(get_length(current_path), new_path, i, n_cities);
-            /* newCost ← cost + Distances(Node, i) */
+            /* newCost ← cost + Distances(Node, i). */
             set_cost(new_path, get_cost(current_path) + distance(get_node(current_path), i, input));
-            /* newLength ← length + 1 */ 
+            /* newLength ← length + 1. */ 
             set_length(new_path, get_length(current_path) + 1);
-            /* newBound ← newBound */ 
+            /* newBound ← newBound. */ 
             set_bound(new_path, newBound);
-            /* newNode ← i */ 
+            /* newNode ← i. */ 
             set_node(new_path, i);
 
             set_isInTour(new_path, i, get_isInTour(current_path));

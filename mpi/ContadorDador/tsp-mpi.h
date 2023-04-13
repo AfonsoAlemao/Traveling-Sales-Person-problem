@@ -13,8 +13,8 @@
 *
 **********************************************************************************/
 
-#ifndef _TSP_OMP_H
-#define _TSP_OMP_H
+#ifndef _TSP_MPI_H
+#define _TSP_MPI_H
 
 #include <omp.h>
 
@@ -22,7 +22,7 @@
 #include "queue.h"
 
 Solution *tsp_mpi(Inputs *input, int argc, char *argv[]);
-void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int rank, int numprocs, double *BestTourCostAuxx, bool comm, MPI_Request *reqsend, int *procBestCost, bool *updateCost, int auxProcBestCost, int receiver, int MYTAG);
+void work(priority_queue_t *queue, int n_cities, double *BestTourCost, Inputs* input, Solution *sol, Path* current_path, int *flag, int numprocs, double *BestTourCostAuxx, bool comm, MPI_Request *reqsend, bool *updateCost, int receiver, int MYTAG);
 #endif
 
 
