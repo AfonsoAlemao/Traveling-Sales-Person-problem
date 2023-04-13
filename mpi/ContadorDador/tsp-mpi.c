@@ -377,9 +377,9 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
                         /* Check if the receiver has finished. */
                         MPI_Test(&reqF, &flag_recF, &statF);
                         if (flag_recF) {
-                            /* In that case, the last element we send to the receiver might not have been delivered, 
-                            so we add it again to our queue. Furthermore we stop sending elements periodically 
-                            to the receiver. */
+                            /* In that case, the last element the process sent to the receiver might not have been delivered, 
+                            so the process adds it again to its master thread queue, and also stops sending elements
+                            periodically to the receiver. */
                             receivedF = false;
                             stopsending = true;
                             if (path_to_send != NULL) {
@@ -502,7 +502,7 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     }
     BestTourCostAux = BestTourCost; 
 
-    /* Syncronization to secure that all the processes have its result before broadcasting it. */
+    /* Synchronization to secure that all the processes have their result before broadcasting them. */
     MPI_Barrier(MPI_COMM_WORLD);
 
     /* This section is to join the results from the multiple processes. 
@@ -511,7 +511,6 @@ Solution *tsp_mpi(Inputs *input, int argc, char *argv[]) {
     it will invalidate itself. */
     for (int iii = 0; iii < numprocs; iii++) {
         MPI_Bcast (&BestTourCostAux, 1, MPI_DOUBLE, iii, MPI_COMM_WORLD); 
-        MPI_Barrier(MPI_COMM_WORLD);
         if (BestTourCostAux < BestTourCost && (int) BestTourCostAux > 0) {
             valid = false;
         }
